@@ -345,20 +345,58 @@ export default {
 };
 
 async function animSupply(el, A) {
-  const [{ anim2d, seriesPanel, arrow, text, at, lerp, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
+  const [{ anim2d, seriesPanel, arrow, label, placeLabels, isSteady, para, fs, at, lerp, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
   const R = A.R, lo = Math.min(...R.Ta, ...R.Tt) - 2, hi = Math.max(...R.Tsrc.filter(Number.isFinite), ...R.Tt) + 2, col = (T) => `rgb(${cmap(clamp((T - lo) / (hi - lo), 0, 1), 'inferno').map(Math.round).join(',')})`;
   const qmax = Math.max(1, ...R.Qin, ...R.Qeng);
-  anim2d(el, { duration: A.H, rate: A.H / 20, label: 'Profile time', unit: 'h', height: 440, explain: 'Solved buffer-tank history: block colours are temperatures (source, tank, fluid at cells), arrow widths are heat rates. Lower panels sweep the same time axis. The engine block greys out while the controller holds it off.', draw(g, t, W, H) {
-    const th = theme(), k = at(R.t, t), Ts = lerp(R.Tsrc, k), Tt = lerp(R.Tt, k), Tsup = lerp(R.Tsup, k), Qi = lerp(R.Qin, k), Qe = lerp(R.Qeng, k), on = R.on[k.i];
-    const y = 30, bh = 90, bw = Math.min(130, W / 6);
-    g.fillStyle = col(Ts); g.fillRect(20, y, bw, bh); text(g, A.isSolar ? 'Collector' : 'Source', 26, y + 16, '#fff'); text(g, `${fmt(Ts, 3)} °C`, 26, y + 34, '#fff');
-    const x2 = 20 + bw + 70; g.fillStyle = col(Tt); g.fillRect(x2, y, bw, bh); text(g, 'Buffer tank', x2 + 6, y + 16, '#fff'); text(g, `${fmt(Tt, 4)} °C`, x2 + 6, y + 34, '#fff');
-    const x3 = x2 + bw + 70; g.fillStyle = on ? col(Tsup) : th.bg2; g.fillRect(x3, y, bw, bh); text(g, on ? 'SMA cells (running)' : 'SMA cells (off)', x3 + 6, y + 16, on ? '#fff' : th.mute); text(g, `arrival ${fmt(Tsup, 4)} °C`, x3 + 6, y + 34, on ? '#fff' : th.mute);
-    arrow(g, 20 + bw + 4, y + bh / 2, 60, 0, '#f97316', 1 + 10 * Qi / qmax, `${fmt(Qi, 3)} W`);
-    arrow(g, x2 + bw + 4, y + bh / 2, 60, 0, '#ef4444', 1 + 10 * Qe / qmax, `${fmt(Qe, 3)} W`);
-    text(g, `T_req ${fmt(A.ThReq, 3)} °C · Af(σH) ${fmt(A.AfH, 3)} °C`, x3 + bw + 10, y + 16, th.mute);
-    const py = y + bh + 30, ph = (H - py - 10) / 2 - 6;
-    seriesPanel(g, { x: 10, y: py, w: W - 20, h: ph, T: R.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'source', y: R.Tsrc, color: '#f97316' }, { name: 'tank', y: R.Tt, color: '#facc15' }, { name: 'arrival', y: R.Tsup, color: '#ef4444' }], hlines: [{ y: A.ThReq, label: 'T_req', color: '#22c55e' }, { y: A.AfH, label: 'Af(σH)', color: '#ef4444' }] });
-    seriesPanel(g, { x: 10, y: py + ph + 12, w: W - 20, h: ph, T: R.t, t, title: 'Heat rates', unit: 'W', series: [{ name: 'into buffer', y: R.Qin, color: '#f97316' }, { name: 'engine draw', y: R.Qeng, color: '#38bdf8' }], hlines: [{ y: A.Qd, label: 'demand', color: '#a855f7' }] });
+  // steady supply (constant source, tank and draw after the start-up transient, engine state unchanged) → static energy-flow diagram
+  const i0 = Math.floor(R.t.length * 0.1), steady = isSteady([R.Tsrc, R.Tt, R.Tsup, R.Qin, R.Qeng], { skip: 0.1, tol: 0.01 }) && R.on.slice(i0).every(v => v === R.on[i0]);
+  const lum = (T) => { const c = cmap(clamp((T - lo) / (hi - lo), 0, 1), 'inferno'); return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]; }, ink = (T) => lum(T) > 140 ? '#111827' : '#ffffff';
+  // three blocks with heat-flow arrows; horizontal on wide canvases, stacked on phones. Returns the y below the diagram.
+  const flow = (g, W, y0, v) => {
+    const th = theme(), z = fs(W), narrow = W < 560, blocks = [
+      { name: A.isSolar ? 'Collector' : 'Source', val: `${fmt(v.Ts, 3)} °C`, fill: col(v.Ts), ink: ink(v.Ts) },
+      { name: 'Buffer tank', val: `${fmt(v.Tt, 4)} °C`, fill: col(v.Tt), ink: ink(v.Tt) },
+      { name: v.on ? 'SMA cells (running)' : 'SMA cells (off)', val: `arrival ${fmt(v.Tsup, 4)} °C`, fill: v.on ? col(v.Tsup) : th.bg2, ink: v.on ? ink(v.Tsup) : th.mute }];
+    const flows = [{ q: v.Qi, c: '#f97316', name: 'into buffer' }, { q: v.Qe, c: '#ef4444', name: 'engine draw' }];
+    const box = (b, x, y, w, hh) => { g.fillStyle = b.fill; g.fillRect(x, y, w, hh); g.strokeStyle = th.grid; g.strokeRect(x + 0.5, y + 0.5, w - 1, hh - 1); label(g, b.name, x + 6, y + 6, { baseline: 'top', maxW: w - 12, size: z, weight: '600', color: b.ink }); label(g, b.val, x + 6, y + 8 + z * 1.3, { baseline: 'top', maxW: w - 12, size: z, color: b.ink }); };
+    if (!narrow) {
+      const gapW = clamp(W * 0.12, 90, 150), bw = Math.min(190, (W - 20 - 2 * gapW) / 3), bh = 64, x0 = (W - 3 * bw - 2 * gapW) / 2;
+      blocks.forEach((b, i) => box(b, x0 + i * (bw + gapW), y0, bw, bh));
+      flows.forEach((f, i) => { const ax = x0 + bw + i * (bw + gapW) + 6, aw = gapW - 12; arrow(g, ax, y0 + bh / 2 + 6, aw, 0, f.c, 1 + 9 * f.q / qmax); label(g, `${fmt(f.q, 3)} W`, ax + aw / 2, y0 + bh / 2 - 8, { align: 'center', baseline: 'bottom', maxW: aw, size: z, weight: '600', color: f.c }); });
+      return y0 + bh;
+    }
+    const bw = Math.min(W - 24, 300), bh = 44, gapH = 34, x0 = (W - bw) / 2;
+    blocks.forEach((b, i) => box(b, x0, y0 + i * (bh + gapH), bw, bh));
+    flows.forEach((f, i) => { const ay = y0 + bh + i * (bh + gapH) + 4, ax = x0 + 26; arrow(g, ax, ay, 0, gapH - 8, f.c, 1 + 9 * f.q / qmax); label(g, `${f.name} ${fmt(f.q, 3)} W`, ax + 14, ay + (gapH - 8) / 2, { baseline: 'middle', maxW: bw - 40, size: z, weight: '600', color: f.c }); });
+    return y0 + 3 * bh + 2 * gapH;
+  };
+  const caption = (g, W, y) => para(g, `Required supply T_req ${fmt(A.ThReq, 3)} °C · austenite finish Af(σH) ${fmt(A.AfH, 3)} °C · engine heat demand ${fmt(A.Qd, 3)} W`, 12, y, W - 24, { size: fs(W) - 1, color: theme().mute, maxLines: 3 });
+  const valsAt = (t) => { const k = at(R.t, t); return { Ts: lerp(R.Tsrc, k), Tt: lerp(R.Tt, k), Tsup: lerp(R.Tsup, k), Qi: lerp(R.Qin, k), Qe: lerp(R.Qeng, k), on: R.on[k.i] }; };
+  if (steady) {
+    const v = valsAt(R.t[R.t.length - 1]), loss = v.Qi - v.Qe;
+    anim2d(el, { staticWhen: true, height: (W) => W < 560 ? 500 : 320, explain: `Static view: over the ${fmt(A.H, 3)} h horizon the source, tank and arrival temperatures and both heat rates stay within 1 % of their steady values after start-up, so the solved steady state is drawn instead of replaying flat lines. Arrow widths are heat rates; the ladder below places the delivered temperatures against the requirement and Af(σH).`, draw(g, _t, W, H) {
+      const th = theme(), z = fs(W);
+      label(g, 'Steady energy flow (after start-up)', 12, 10, { baseline: 'top', size: z + 1, weight: '600', maxW: W - 24 });
+      let y = flow(g, W, 34, v) + 14;
+      y = caption(g, W, y + z) + 2;
+      label(g, `Tank + line losses ≈ ${fmt(loss, 3)} W (${fmt(100 * loss / Math.max(1e-9, v.Qi), 3)} % of heat into the buffer)`, 12, y, { baseline: 'top', size: z - 1, color: th.mute, maxW: W - 24 });
+      // temperature ladder
+      const ly = y + 72, lx0 = 24, lx1 = W - 24, temps = [v.Ts, v.Tt, v.Tsup, A.ThReq, A.AfH].filter(Number.isFinite), tlo = Math.min(...temps) - 2, thi = Math.max(...temps) + 2, Xt = (T) => lx0 + (T - tlo) / (thi - tlo) * (lx1 - lx0);
+      const grd = g.createLinearGradient(lx0, 0, lx1, 0); for (let i = 0; i <= 10; i++) grd.addColorStop(i / 10, col(tlo + (thi - tlo) * i / 10)); g.fillStyle = grd; g.fillRect(lx0, ly, lx1 - lx0, 8);
+      label(g, `${fmt(tlo, 3)} °C`, lx0, ly + 12, { baseline: 'top', size: z - 2, color: th.mute }); label(g, `${fmt(thi, 3)} °C`, lx1, ly + 12, { align: 'right', baseline: 'top', size: z - 2, color: th.mute });
+      const marks = [{ T: v.Ts, n: A.isSolar ? 'collector' : 'source', c: '#f97316', up: true }, { T: v.Tt, n: 'tank', c: '#ca8a04', up: true }, { T: v.Tsup, n: 'arrival', c: '#ef4444', up: true }, { T: A.ThReq, n: 'T_req', c: '#16a34a', up: false }, { T: A.AfH, n: 'Af(σH)', c: '#a855f7', up: false }];
+      for (const m of marks) { g.strokeStyle = m.c; g.lineWidth = 2; g.beginPath(); g.moveTo(Xt(m.T), ly - 6); g.lineTo(Xt(m.T), ly + 14); g.stroke(); g.lineWidth = 1; }
+      placeLabels(g, marks.filter(m => m.up).map(m => ({ text: `${m.n} ${fmt(m.T, 3)}`, x: Xt(m.T), y: ly - 16, align: 'center', color: m.c, size: z - 1, bg: true, pad: 2 })), { top: y + 20, bottom: ly - 7 });
+      placeLabels(g, marks.filter(m => !m.up).map(m => ({ text: `${m.n} ${fmt(m.T, 3)}`, x: Xt(m.T), y: ly + 34, align: 'center', color: m.c, size: z - 1, bg: true, pad: 2 })), { top: ly + 26, bottom: H - 2 });
+    } });
+    return;
+  }
+  anim2d(el, { duration: A.H, rate: A.H / 20, label: 'Profile time', unit: 'h', height: (W) => W < 560 ? 660 : 500, explain: 'Solved buffer-tank history: block colours are temperatures (source, tank, fluid at cells), arrow widths are heat rates. Lower panels sweep the same time axis. The engine block greys out while the controller holds it off.', draw(g, t, W, H) {
+    const v = valsAt(t);
+    let y = flow(g, W, 12, v) + 8;
+    y = caption(g, W, y + fs(W)) + 4;
+    const ph = (H - y - 10) / 2 - 6;
+    seriesPanel(g, { x: 10, y, w: W - 20, h: ph, T: R.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'source', y: R.Tsrc, color: '#f97316' }, { name: 'tank', y: R.Tt, color: '#facc15' }, { name: 'arrival', y: R.Tsup, color: '#ef4444' }], hlines: [{ y: A.ThReq, label: 'T_req', color: '#22c55e' }, { y: A.AfH, label: 'Af(σH)', color: '#a855f7' }] });
+    seriesPanel(g, { x: 10, y: y + ph + 12, w: W - 20, h: ph, T: R.t, t, title: 'Heat rates', unit: 'W', series: [{ name: 'into buffer', y: R.Qin, color: '#f97316' }, { name: 'engine draw', y: R.Qeng, color: '#38bdf8' }], hlines: [{ y: A.Qd, label: 'demand', color: '#a855f7' }] });
   } });
 }

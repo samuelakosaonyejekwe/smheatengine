@@ -83,12 +83,20 @@ export function liveStrip(el, { height = 240, span = 20 } = {}) {
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.font = '11px system-ui,sans-serif';
     if (!t.length || !names.length) { g.fillStyle = css('--muted', '#94a3b8'); g.fillText('No samples yet', 12, 20); return; }
     const tEnd = t[t.length - 1], t0 = tEnd - span, lane = H / names.length; let i0 = t.length - 1; while (i0 > 0 && t[i0 - 1] >= t0) i0--;
+    // right-hand label column sized to the text (≤ 45 % of the width); text shrinks, then truncates with an ellipsis
+    const fz = Math.max(8, Math.min(11, lane / 2.6)), two = lane >= 2 * fz + 10, fit = (s, w) => { g.font = `${fz}px system-ui,sans-serif`; if (g.measureText(s).width <= w) return s; let n = s.length; while (n > 1 && g.measureText(s.slice(0, n) + '…').width > w) n--; return s.slice(0, n) + '…'; };
+    g.font = `${fz}px system-ui,sans-serif`; const colW = Math.min(W * 0.45, 12 + Math.max(...names.map(n => g.measureText(`${n} = ${fmt(channels[n][channels[n].length - 1], 4)}`).width + 8))), plotW = W - colW - 6;
     names.forEach((n, k) => {
-      const y = channels[n], seg = y.slice(i0).filter(Number.isFinite); const lo = Math.min(...seg), hi = Math.max(...seg), pad = (hi - lo) * 0.1 || 1, a = lo - pad, b = hi + pad, top = k * lane;
+      const y = channels[n], seg = y.slice(i0).filter(Number.isFinite); const lo = seg.length ? Math.min(...seg) : 0, hi = seg.length ? Math.max(...seg) : 1, pad = (hi - lo) * 0.1 || 1, a = lo - pad, b = hi + pad, top = k * lane;
       g.strokeStyle = css('--grid', 'rgba(148,163,184,.2)'); g.beginPath(); g.moveTo(0, top + lane); g.lineTo(W, top + lane); g.stroke();
+      g.save(); g.beginPath(); g.rect(0, top, plotW, lane); g.clip();
       g.strokeStyle = palette(k); g.lineWidth = 1.5; g.beginPath(); let m = false;
-      for (let i = i0; i < t.length; i++) { if (!Number.isFinite(y[i])) continue; const X = (t[i] - t0) / span * (W - 90), Y = top + lane - 4 - (y[i] - a) / (b - a) * (lane - 8); if (m) g.lineTo(X, Y); else { g.moveTo(X, Y); m = true; } }
-      g.stroke(); g.fillStyle = palette(k); g.fillText(`${n} = ${fmt(y[y.length - 1], 4)}`, W - 88, top + 14); g.fillStyle = css('--muted', '#94a3b8'); g.fillText(`${fmt(hi, 3)} / ${fmt(lo, 3)}`, W - 88, top + 28);
+      for (let i = i0; i < t.length; i++) { if (!Number.isFinite(y[i])) continue; const X = (t[i] - t0) / span * plotW, Y = top + lane - 4 - (y[i] - a) / (b - a) * (lane - 8); if (m) g.lineTo(X, Y); else { g.moveTo(X, Y); m = true; } }
+      g.stroke(); g.restore();
+      const tx = W - colW + 4, cw = colW - 8; g.textBaseline = 'middle';
+      g.fillStyle = palette(k); g.fillText(fit(`${n} = ${fmt(y[y.length - 1], 4)}`, cw), tx, top + (two ? lane / 2 - fz * 0.65 : lane / 2));
+      if (two) { g.fillStyle = css('--muted', '#94a3b8'); g.fillText(fit(`${fmt(hi, 3)} / ${fmt(lo, 3)}`, cw), tx, top + lane / 2 + fz * 0.65); }
+      g.textBaseline = 'alphabetic';
     });
   };
   return { bind(fn) { src = fn; }, request() { if (!raf) raf = requestAnimationFrame(draw); }, destroy() { cancelAnimationFrame(raf); src = null; } };

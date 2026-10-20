@@ -10,3 +10,8 @@
 .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .lib-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--fg);font:inherit}
 .lib-card:hover{border-color:var(--accent)}.lib-card b{display:block}.lib-card .fam{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.update-wrap.closing{animation:upfade .2s ease reverse forwards}
+.update-pop .up-icon{color:#fff;background:linear-gradient(135deg,#ea580c,#dc2626);box-shadow:0 6px 18px rgba(234,88,12,.45)}
+.update-pop h3{margin:2px 0 0;font-size:18px;line-height:1.25}
+.update-pop .up-list li::marker{color:var(--accent)}
+@media (max-width:520px){.update-pop{border-radius:16px}.up-foot{flex-direction:column-reverse}.up-foot .btn{width:100%}}

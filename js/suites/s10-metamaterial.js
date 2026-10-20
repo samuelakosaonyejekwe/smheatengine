@@ -402,14 +402,14 @@ export default {
     if (p.cellType === 'amplifier') {
       const rows = ampRun.rows, dmax = rows[rows.length - 1].d, smx = Math.max(...rows.map(r => r.hot));
       out.views.push({ label: 'Amplifier stroke animation', icon: '⬡', render: async (el) => {
-        const { anim2d, seriesPanel, theme } = await import('../core/anim2d.js'), { cmap } = await import('../core/chart.js');
+        const { anim2d, seriesPanel, theme, label, fs } = await import('../core/anim2d.js'), { cmap } = await import('../core/chart.js');
         const T = rows.map(r => r.d / dmax), ext = Math.max(BM.a, BM.c * 2.5) * 1.25;
-        anim2d(el, { duration: 2, label: 'Cycle', unit: '', height: 420, explain: 'The bridge closes at the input blocks (cartridge contraction) and opens at the apexes (output). Element colour is the local peak stress; the panel shows input and output force along the stroke.', draw: (g, t, W, H) => {
+        anim2d(el, { duration: 2, label: 'Cycle', unit: '', height: (W) => W < 640 ? 640 : 420, explain: 'The bridge closes at the input blocks (cartridge contraction) and opens at the apexes (output). Element colour is the local peak stress; the panel shows input and output force along the stroke.', draw: (g, t, W, H) => {
           const th = theme(), ph = t <= 1 ? t : 2 - t, q = ph * (rows.length - 1), k = Math.min(rows.length - 2, Math.floor(q)), f = q - k, r = rows[k], rn = rows[k + 1];
-          const cx = W * 0.3, cy = H / 2, sc = Math.min(W * 0.28, H * 0.45) / ext;
+          const narrow = W < 640, dH = narrow ? 280 : H, cx = narrow ? W / 2 : W * 0.3, cy = dH / 2 - 8, sc = (narrow ? Math.min(W * 0.42, dH * 0.4) : Math.min(W * 0.28, H * 0.45)) / ext;
           BM.els.forEach((e, n) => { const ui = (a) => r.u[a] + (rn.u[a] - r.u[a]) * f, x1 = BM.X[e.i][0] + ui(3 * e.i), y1 = BM.X[e.i][1] + ui(3 * e.i + 1), x2 = BM.X[e.j][0] + ui(3 * e.j), y2 = BM.X[e.j][1] + ui(3 * e.j + 1); const s = r.st[n].sig / (smx || 1), c = cmap(Math.min(1, s), 'inferno'); g.strokeStyle = `rgb(${c.map(Math.round).join(',')})`; g.lineWidth = e.kind === 'arm' ? 6 : 2.5; g.beginPath(); g.moveTo(cx + x1 * sc, cy - y1 * sc); g.lineTo(cx + x2 * sc, cy - y2 * sc); g.stroke(); });
-          g.fillStyle = th.fg; g.fillText(`input closure ${fmt((r.d + (rn.d - r.d) * f) * 1000, 3)} mm → output ${fmt((r.dout + (rn.dout - r.dout) * f) * 1000, 3)} mm`, 10, H - 12);
-          seriesPanel(g, { x: W * 0.6, y: 10, w: W * 0.38, h: H - 20, T, series: [{ name: 'F_in', y: rows.map(q2 => q2.Fin), color: '#ef4444' }, { name: 'F_out', y: rows.map(q2 => q2.Fout), color: '#22c55e' }], t: ph, title: 'Force along the stroke', unit: 'N' });
+          label(g, `input closure ${fmt((r.d + (rn.d - r.d) * f) * 1000, 3)} mm → output ${fmt((r.dout + (rn.dout - r.dout) * f) * 1000, 3)} mm`, 10, dH - 12, { size: fs(W), maxW: (narrow ? W : W * 0.58) - 20 });
+          seriesPanel(g, { x: narrow ? 10 : W * 0.6, y: narrow ? dH : 10, w: narrow ? W - 20 : W * 0.38, h: narrow ? H - dH - 10 : H - 20, T, series: [{ name: 'F_in', y: rows.map(q2 => q2.Fin), color: '#ef4444' }, { name: 'F_out', y: rows.map(q2 => q2.Fout), color: '#22c55e' }], t: ph, title: 'Force along the stroke', unit: 'N' });
         } });
       } });
     } else if (p.cellType === 'bistable') {
@@ -417,22 +417,22 @@ export default {
       out.views.push({ label: 'Snap-through animation', icon: '⬡', render: async (el) => {
         const { anim2d, seriesPanel, theme } = await import('../core/anim2d.js');
         const T = BB.d.map(v => v / BB.d[n - 1]);
-        anim2d(el, { duration: 2, label: 'Cycle', unit: '', height: 400, explain: 'Displacement-controlled continuation: the pre-shaped beam is pushed through its unstable branch (red) to the second stable state and back. The panel shows force along the path; negative force means the beam would snap without load.', draw: (g, t, W, H) => {
-          const th = theme(), ph = t <= 1 ? t : 2 - t, k = Math.min(n - 1, Math.round(ph * (n - 1))), a = BB.coeffs[k], L = p.bL / 1000, sc = W * 0.5 / L, ys = H * 0.25 / Math.max(p.bH / 1000, 1e-9), cx = W * 0.05, cy = H * 0.55;
+        anim2d(el, { duration: 2, label: 'Cycle', unit: '', height: (W) => W < 640 ? 600 : 400, explain: 'Displacement-controlled continuation: the pre-shaped beam is pushed through its unstable branch (red) to the second stable state and back. The panel shows force along the path; negative force means the beam would snap without load.', draw: (g, t, W, H) => {
+          const th = theme(), ph = t <= 1 ? t : 2 - t, k = Math.min(n - 1, Math.round(ph * (n - 1))), a = BB.coeffs[k], L = p.bL / 1000, narrow = W < 640, dH = narrow ? 240 : H, sc = (narrow ? W * 0.85 : W * 0.5) / L, ys = dH * 0.25 / Math.max(p.bH / 1000, 1e-9), cx = narrow ? W * 0.07 : W * 0.05, cy = dH * 0.55;
           g.strokeStyle = BB.F[k] < 0 ? '#ef4444' : th.accent; g.lineWidth = 3; g.beginPath(); for (let i = 0; i <= 60; i++) { const x = L * i / 60, w = bistShape(a, L, x); const px = cx + x * sc, py = cy - w * ys; i ? g.lineTo(px, py) : g.moveTo(px, py); } g.stroke();
           g.fillStyle = th.mute; g.fillRect(cx - 6, cy - 30, 6, 60); g.fillRect(cx + L * sc, cy - 30, 6, 60);
-          seriesPanel(g, { x: W * 0.62, y: 10, w: W * 0.36, h: H - 20, T, series: [{ name: 'F', y: BB.F, color: '#22c55e' }], t: ph, title: 'Snap-through force', unit: 'N', hlines: [{ y: 0, label: '', color: '#64748b' }] });
+          seriesPanel(g, { x: narrow ? 10 : W * 0.62, y: narrow ? dH : 10, w: narrow ? W - 20 : W * 0.36, h: narrow ? H - dH - 10 : H - 20, T, series: [{ name: 'F', y: BB.F, color: '#22c55e' }], t: ph, title: 'Snap-through force', unit: 'N', hlines: [{ y: 0, label: '', color: '#64748b' }] });
         } });
       } });
     } else {
       out.views.push({ label: 'Lattice deformation animation', icon: '⬡', render: async (el) => {
-        const { anim2d, theme } = await import('../core/anim2d.js');
+        const { anim2d, theme, label, fs } = await import('../core/anim2d.js');
         const c = cellA, segs = []; for (let i = 0; i < Math.min(p.nx, 6); i++) for (let j = 0; j < Math.min(p.ny, 5); j++) { const o = [i * c.a1[0] + j * c.a2[0], j * c.a2[1]]; for (const s of c.struts) { const sh = s.shift || [0, 0], p1 = c.nodes[s.i], p2 = c.nodes[s.j]; segs.push([[o[0] + p1[0], o[1] + p1[1]], [o[0] + p2[0] + sh[0] * c.a1[0] + sh[1] * c.a2[0], o[1] + p2[1] + sh[0] * c.a1[1] + sh[1] * c.a2[1]]]); } }
-        const xs = segs.flat().map(q => q[0]), ys = segs.flat().map(q => q[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), span = Math.max(Math.max(...xs) - x0, Math.max(...ys) - y0);
+        const xs = segs.flat().map(q => q[0]), ys = segs.flat().map(q => q[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), spanX = Math.max(...xs) - x0 || 1, spanY = Math.max(...ys) - y0 || 1;
         anim2d(el, { duration: 2, label: 'Cycle', unit: '', height: 400, explain: 'Affine (homogenised) deformation of the re-entrant lattice, exaggerated ×' + f3(0.15 / Math.max(Math.abs(auxL.ex), 1e-9)) + ': input compression along x produces lateral contraction along y (negative Poisson ratio).', draw: (g, t, W, H) => {
-          const th = theme(), ph = t <= 1 ? t : 2 - t, amp2 = 0.15 / Math.max(Math.abs(auxL.ex), 1e-9), ex = auxL.ex * ph * amp2, ey = auxL.ey * ph * amp2, sc = Math.min(W, H) * 0.8 / span;
-          g.strokeStyle = th.accent; g.lineWidth = 2; for (const [a, b] of segs) { g.beginPath(); g.moveTo(W * 0.1 + (a[0] - x0) * (1 + ex) * sc, H * 0.9 - (a[1] - y0) * (1 + ey) * sc); g.lineTo(W * 0.1 + (b[0] - x0) * (1 + ex) * sc, H * 0.9 - (b[1] - y0) * (1 + ey) * sc); g.stroke(); }
-          g.fillStyle = th.fg; g.fillText(`ν_xy = ${fmt(LH.nuxy, 3)}  ε_x = ${fmt(auxL.ex * ph, 3)}  ε_y = ${fmt(auxL.ey * ph, 3)}`, 10, 16);
+          const th = theme(), ph = t <= 1 ? t : 2 - t, amp2 = 0.15 / Math.max(Math.abs(auxL.ex), 1e-9), ex = auxL.ex * ph * amp2, ey = auxL.ey * ph * amp2, sc = Math.min((W - 40) / spanX, (H - 60) / spanY) * 0.92, ox = (W - spanX * sc) / 2, oy = H - 16 - (H - 44 - spanY * sc) / 2;
+          g.strokeStyle = th.accent; g.lineWidth = 2; for (const [a, b] of segs) { g.beginPath(); g.moveTo(ox + (a[0] - x0) * (1 + ex) * sc, oy - (a[1] - y0) * (1 + ey) * sc); g.lineTo(ox + (b[0] - x0) * (1 + ex) * sc, oy - (b[1] - y0) * (1 + ey) * sc); g.stroke(); }
+          label(g, `ν_xy = ${fmt(LH.nuxy, 3)}  ε_x = ${fmt(auxL.ex * ph, 3)}  ε_y = ${fmt(auxL.ey * ph, 3)}`, 10, 8, { baseline: 'top', size: fs(W), maxW: W - 20, bg: true });
         } });
       } });
     }

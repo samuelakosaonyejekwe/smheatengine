@@ -13,7 +13,7 @@ export async function render(root) {
       h('div', { class: 'suite-group' }, 'Regenerative, high-performance shape-memory thermal engine'),
       h('h1', {}, 'THERMA-X100 engineering console'),
       h('p', {}, 'A standalone research environment for a multicell shape-memory-alloy heat engine: heat → crystalline phase transformation → contraction → force → shaft torque → cooling and reset → repetition. Choose any of the 22 coupled suites; the input generator (EIGDAS) builds a consistent model from your intent, the library, live global data and upstream results, runs the governing physics and returns explained results, verdicts and recommendations.'),
-      h('div', { class: 'row gap wrap' }, h('a', { class: 'btn primary', href: '#/feasibility' }, '▶ Run the feasibility gate'), h('a', { class: 'btn', href: '#/suite/s01' }, '🏛 Define the engine'), h('a', { class: 'btn', href: '#/suite/s05' }, '🧵 Cartridge cycle'), h('a', { class: 'btn', href: '#/library' }, '🧪 Materials library'), h('a', { class: 'btn', href: '#/portal' }, '⇪ Supply data')),
+      h('div', { class: 'row gap wrap' }, h('a', { class: 'btn primary', href: '#/feasibility' }, '▶ Run the feasibility gate'), h('a', { class: 'btn', href: '#/suite/s01' }, '🏛 Define the engine'), h('a', { class: 'btn', href: '#/suite/s05' }, '🧵 Cartridge cycle'), h('a', { class: 'btn', href: '#/library' }, '🧪 Materials library'), h('a', { class: 'btn', href: '#/portal' }, '⇪ Supply data'), h('a', { class: 'btn', href: '#/dossier' }, '📘 Engineering dossier'), h('a', { class: 'btn', href: '#/lab' }, '⚗ Laboratory')),
       stats),
     heroAnim));
   engineAnimation(heroAnim, d);

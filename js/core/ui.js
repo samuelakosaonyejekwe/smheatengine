@@ -20,7 +20,7 @@ export function provChip(p) { const d = PROVENANCE[p] || PROVENANCE.estimated; r
 
 export function toast(msg, kind = 'info', ms = 3500) {
   let box = $('#toasts'); if (!box) { box = h('div', { id: 'toasts' }); document.body.append(box); }
-  const t = h('div', { class: `toast ${kind}`, role: 'status' }, msg); box.append(t); setTimeout(() => t.classList.add('out'), ms); setTimeout(() => t.remove(), ms + 400);
+  const t = h('div', { class: `toast ${kind}`, role: 'status' }, msg); box.append(t); setTimeout(() => t.classList.add('out'), ms); setTimeout(() => t.remove(), ms + 400); return t;
 }
 export function modal(title, body, actions = []) {
   const close = () => wrap.remove();

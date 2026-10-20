@@ -7,7 +7,7 @@ import { bom as econBom } from '../core/econ.js';
 import { engineModel } from '../core/engine.js';
 import { get as getMat } from '../core/materials.js';
 import { rng, mean, std, histogram, linspace, fmt, percentile, normCdf } from '../core/num.js';
-import { anim2d, bar as aBar, text, theme } from '../core/anim2d.js';
+import { anim2d, label, fs as fontPx, theme } from '../core/anim2d.js';
 
 // Representative shape-setting trend for Ni-rich NiTi (Ni₄Ti₃ precipitation raises Af, peaking ≈ 400–450 °C; dissolution
 // and recovery above ≈ 500 °C). Hypothetical surface for planning only — calibrate with DSC of heat-treated coupons.
@@ -219,7 +219,15 @@ export default {
     out.recs.push({ level: 'econ', text: `Largest part cost: ${top.name} (${fmt(top.total, 4)} USD, ${fmt(top.labour / Math.max(top.total, 1e-9) * 100, 3)} % labour). Labour is ${fmt(B.totals.labour / B.totals.engine * 100, 3)} % of part cost — fixtures for ribbon cutting/gripping and a multi-ribbon training rig cut the ${fmt(ribbonRow.hours + trainH, 3)} h ribbon work.`, basis: 'BOM' });
     out.recs.push({ level: 'sustain', text: `Embodied footprint ≈ ${fmt(B.totals.co2, 3)} kg CO₂e; NiTi ribbon contributes ${fmt(ribbonRow.co2, 3)} kg for only ${fmt(ribbonRow.mass, 3)} kg. Recover ribbon off-cuts (buy-to-fly 1.4) for remelting and keep housings in recyclable 6061 aluminium.`, basis: 'Materials library co2 × buy-to-fly' });
     // ---------------- view ----------------
-    out.views.push({ label: '2D animation: build progress', icon: '🎞', render: (el) => anim2d(el, { duration: makespan, label: 'Elapsed', unit: 'h', height: 26 + steps.length * 22, explain: 'Workflow steps fill as labour time elapses; colour turns green when the inspection gate is reached.', draw: (g, t, W) => { const th = theme(); text(g, `t = ${fmt(t, 3)} h of ${fmt(makespan, 3)} h critical path`, 10, 16, th.accent); steps.forEach((s, i) => { const f = Math.max(0, Math.min(1, (t - s.start) / (s.h || 1))); aBar(g, { x: 10, y: 24 + i * 22, w: W - 20, h: 16, value: f * 100, max: 100, label: `${s.id}. ${s.name.slice(0, 60)}`, color: f >= 1 ? '#22c55e' : '#38bdf8', unit: ' %' }); }); } }) });
+    out.views.push({ label: '2D animation: build progress', icon: '🎞', render: (el) => anim2d(el, { duration: makespan, label: 'Elapsed', unit: 'h', height: 26 + steps.length * 22, explain: 'Workflow steps fill as labour time elapses; colour turns green when the inspection gate is reached.', draw: (g, t, W) => {
+      const th = theme(), z = fontPx(W); label(g, `t = ${fmt(t, 3)} h of ${fmt(makespan, 3)} h critical path`, 10, 16, { size: z, weight: '600', color: th.accent, maxW: W - 20 });
+      steps.forEach((s, i) => {
+        const f = Math.max(0, Math.min(1, (t - s.start) / (s.h || 1))), y = 24 + i * 22, w = W - 20, pct = `${fmt(f * 100, 3)} %`;
+        g.fillStyle = th.bg2; g.fillRect(10, y, w, 16); g.fillStyle = f >= 1 ? '#22c55e' : '#38bdf8'; g.fillRect(10, y, f * w, 16); g.strokeStyle = th.grid; g.strokeRect(10, y, w, 16);
+        const v = label(g, pct, 10 + w - 4, y + 8, { align: 'right', baseline: 'middle', size: z, weight: '600' });
+        label(g, `${s.id}. ${s.name}`, 14, y + 8, { baseline: 'middle', size: z, maxW: v.x - 22 });
+      });
+    } }) });
     out.outputs = { partCount, buildHours, makespan_h: makespan, toleranceStack_mm: S1.rss, gapStack_mm: S2.rss, Cpk: CpkMin, CpkPreload: S1.Cpk, CpkGap: S2.Cpk, yield: FPY, unitCost_USD: unitCost, engineCost_USD: B.totals.engine, bopCost_USD: B.totals.bop, assemblyCost_USD: assemblyH * p.labourRate, co2_kg: B.totals.co2, mass_kg: B.totals.mass, ribbonCost_USD: ribbonRow.total, AfAfterSet_C: AfSel, priceProvenance: 'estimated' };
     return out;
   },

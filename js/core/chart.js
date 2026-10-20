@@ -155,7 +155,7 @@ function hover(svg, holder, vis, spec, F, xr) {
 
 function drawBar(svg, spec, W, H, hidden, holder, redraw) {
   const cats = spec.categories || [], series = (spec.series || []).map((s, i) => ({ ...s, color: s.color || palette(i), idx: i }));
-  const vals = series.flatMap(s => s.values), lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const vals = series.flatMap(s => s.values).filter(Number.isFinite), lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
   const horiz = spec.horizontal;
   const m = { l: horiz ? Math.min(200, 12 + Math.max(...cats.map(c => String(c).length)) * 6.5) : 62, r: 18, t: 12, b: horiz ? 40 : 70 };
   const pw = W - m.l - m.r, ph = H - m.t - m.b, fg = css('--fg', '#e5e7eb'), mute = css('--muted', '#94a3b8'), grid = css('--grid', 'rgba(148,163,184,.18)');

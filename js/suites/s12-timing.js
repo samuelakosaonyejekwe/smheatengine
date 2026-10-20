@@ -4,7 +4,7 @@
 // hot-supply peak and valve-switching latency) and of the spatial firing order (rotor/bearing radial load).
 import { linspace, range, mean, std, clamp, nelderMead, fmt } from '../core/num.js';
 import { diffEvolution } from '../core/analysis.js';
-import { cellDrive, scaleDrive, ribbonStiffness, constantSpeedCell, designGear, effRadius, drawRotor, pause } from './s11-shaft.js';
+import { cellDrive, scaleDrive, ribbonStiffness, constantSpeedCell, designGear, effRadius, drawRotor, rotorFit, pause } from './s11-shaft.js';
 
 const TAU = 2 * Math.PI, f3 = (v) => fmt(v, 3), f4 = (v) => fmt(v, 4);
 const STATES = ['Heating', 'Power stroke', 'Isolation / switching', 'Cooling', 'Reset (re-extension)', 'Ready (cold, extended)'];
@@ -210,20 +210,20 @@ export default {
     // ---- animation ----
     const Ttot = Array.from(eO.T), tgA = tg;
     out.views.push({ label: 'Phased array animation', icon: '⏱', render: async (el) => {
-      const { anim2d, at, lerp, seriesPanel, theme } = await import('../core/anim2d.js');
+      const { anim2d, seriesPanel, theme, legendRow, label } = await import('../core/anim2d.js');
       const cols = ['#f59e0b', '#22c55e', '#a855f7', '#38bdf8', '#64748b', '#1e293b'];
-      anim2d(el, { duration: 2 * P, label: 'Time', unit: 's', height: 460, explain: 'Rotor with cells in their firing positions: colour = heated (red) or cold (blue), green arrows = torque of cells in their power stroke. Lower panel: Gantt strip of every cell state with a sweeping cursor; right: total torque.', draw: (g, t, W, Hh) => {
-        const th = theme(), tt = t % P, kk = Math.floor(tt / dt) % M, ang = omega * t;
+      anim2d(el, { duration: 2 * P, label: 'Time', unit: 's', height: (W) => W < 640 ? 640 + 10 * N : 380 + 12 * N, explain: 'Rotor with cells in their firing positions: colour = heated (red) or cold (blue), green arrows = torque of cells in their power stroke. Lower panel: Gantt strip of every cell state with a sweeping cursor; right: total torque.', draw: (g, t, W, Hh) => {
+        const th = theme(), tt = t % P, kk = Math.floor(tt / dt) % M, ang = omega * t, narrow = W < 640;
         const st = range(N).map(i => state[Math.floor((((kk + phiOpt[i] * M) % M) + M) % M)]);
         const tq = range(N).map(i => samp(tau1, kk + phiOpt[i] * M));
         const slot = range(N).map(r => byOffset.find(ci => pos[ci] === r));
-        drawRotor(g, { cx: W * 0.22, cy: Hh * 0.32, r: Math.min(W * 0.11, Hh * 0.15), theta: ang, N, act: slot.map(ci => tq[ci] / (tMax1 || 1)), tau: slot.map(ci => tq[ci]), tauMax: tMax1, heat: slot.map(ci => st[ci] <= 1 || (st[ci] === 2 && ((kk + phiOpt[ci] * M) % M) < nHot) ? 1 : 0), label: '', th });
-        const gx = 10, gy = Hh * 0.62, gw = W - 20, gh = Hh * 0.36, rh = gh / N;
-        for (let r = 0; r < N; r++) { const ci = byOffset[r]; for (let j = 0; j < 160; j++) { const k = Math.floor(j / 160 * M), s = state[Math.floor((((k + phiOpt[ci] * M) % M) + M) % M)]; g.fillStyle = cols[s]; g.fillRect(gx + j / 160 * gw, gy + r * rh, gw / 160 + 0.5, rh - 1); } }
-        g.strokeStyle = th.fg; g.beginPath(); g.moveTo(gx + tt / P * gw, gy); g.lineTo(gx + tt / P * gw, gy + gh); g.stroke();
-        g.font = '10px Inter,system-ui,sans-serif'; STATES.forEach((s, i) => { g.fillStyle = cols[i]; g.fillRect(W * 0.45 + (i % 3) * W * 0.18, Hh * 0.52 + Math.floor(i / 3) * 13, 10, 8); g.fillStyle = th.fg; g.fillText(s, W * 0.45 + (i % 3) * W * 0.18 + 14, Hh * 0.52 + Math.floor(i / 3) * 13 + 8); });
-        seriesPanel(g, { x: W * 0.45, y: 8, w: W * 0.53, h: Hh * 0.42, T: tgA, series: [{ name: 'Σ τ optimised', y: Ttot, color: '#22c55e' }], t: tt, title: 'Total drive torque', unit: 'N·m', hlines: [{ y: eO.s.mean, label: 'mean', color: '#ef4444' }] });
-        void at; void lerp;
+        const aw = narrow ? W : W * 0.42, ah = narrow ? 290 : 250, r = rotorFit(aw, ah, false);
+        drawRotor(g, { cx: aw / 2, cy: ah / 2, r, theta: ang, N, act: slot.map(ci => tq[ci] / (tMax1 || 1)), tau: slot.map(ci => tq[ci]), tauMax: tMax1, heat: slot.map(ci => st[ci] <= 1 || (st[ci] === 2 && ((kk + phiOpt[ci] * M) % M) < nHot) ? 1 : 0), label: '', th });
+        seriesPanel(g, { x: narrow ? 10 : W * 0.45, y: narrow ? ah : 8, w: narrow ? W - 20 : W * 0.53, h: narrow ? 170 : ah - 8, T: tgA, series: [{ name: 'Σ τ optimised', y: Ttot, color: '#22c55e' }], t: tt, title: 'Total drive torque', unit: 'N·m', hlines: [{ y: eO.s.mean, label: 'mean', color: '#ef4444' }] });
+        const ly = (narrow ? ah + 180 : ah + 10), gy = legendRow(g, STATES.map((s2, i) => ({ name: s2, color: cols[i] })), 10, ly, W - 20) + 6;
+        const lw = 22, gx = 10 + lw, gw = W - 20 - lw, gh = Hh - gy - 8, rh = gh / N;
+        for (let r2 = 0; r2 < N; r2++) { const ci = byOffset[r2]; label(g, String(pos[ci] + 1), gx - 4, gy + (r2 + 0.5) * rh, { align: 'right', baseline: 'middle', size: Math.min(10, rh), color: th.mute }); for (let j = 0; j < 160; j++) { const k = Math.floor(j / 160 * M), s2 = state[Math.floor((((k + phiOpt[ci] * M) % M) + M) % M)]; g.fillStyle = cols[s2]; g.fillRect(gx + j / 160 * gw, gy + r2 * rh, gw / 160 + 0.5, rh - 1); } }
+        g.strokeStyle = th.fg; g.lineWidth = 2; g.beginPath(); g.moveTo(gx + tt / P * gw, gy); g.lineTo(gx + tt / P * gw, gy + gh); g.stroke(); g.lineWidth = 1;
       } });
     } });
     out.outputs = { nCells: N, offsets: phiOpt.map(v => +v.toFixed(5)), torqueRipple: eO.s.pp, meanTorque_Nm: eO.s.mean, firingOrder, dutyHot: duty, torqueRippleUniform: eU.s.pp, hotPeakRatio: eO.qPeakRatio, flywheelJ_kgm2: fO.J, cellsInPowerMin: minPower };

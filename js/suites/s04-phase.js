@@ -266,17 +266,18 @@ export default {
 };
 
 async function animate(el, { field, nX, Lhalf, tHeat, Pd, p, tH, tL, xiMeanF }) {
-  const [{ anim2d, seriesPanel, at, lerp, text, theme }, { cmap, cssColor }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
+  const [{ anim2d, seriesPanel, at, lerp, label, para, fs, theme }, { cmap, cssColor }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
   const T = field.t, Ts = field.T.map(r => r[nX - 1]), Tcen = field.T.map(r => r[0]);
-  anim2d(el, { duration: T[T.length - 1], rate: Math.min(1, 0.4 * Pd) / Pd, height: 440, label: 'Cycle time', unit: 's', explain: 'Left: ribbon cross-section (both halves mirrored about the mid-plane) coloured by the solved martensite fraction (blue = martensite, red = austenite) with the fluid colour at the faces. Right: surface/centre temperature and mean ξ histories, and the operating point on the ξ–T loop at σH. All frames come from the solved field run.', draw: (g, t, W, H) => {
-    const th = theme(), k = at(T, t), hot = t < tHeat, x0 = 20, y0 = 40, w = Math.min(320, W * 0.38), hh = H - 90, bandH = hh / (2 * nX);
-    text(g, hot ? `HOT fluid ${p.Tmax} °C — heating at σH = ${p.sigmaH} MPa` : `COLD fluid ${p.Tmin} °C — cooling at σL = ${p.sigmaL} MPa`, x0, 24, hot ? '#ef4444' : '#3b82f6', 'bold 13px Inter,system-ui,sans-serif');
-    g.fillStyle = hot ? 'rgba(239,68,68,.35)' : 'rgba(59,130,246,.35)'; g.fillRect(x0, y0 - 14, w, 12); g.fillRect(x0, y0 + hh + 2, w, 12);
+  anim2d(el, { duration: T[T.length - 1], rate: Math.min(1, 0.4 * Pd) / Pd, height: (W) => W < 640 ? 760 : 460, label: 'Cycle time', unit: 's', explain: 'Left: ribbon cross-section (both halves mirrored about the mid-plane) coloured by the solved martensite fraction (blue = martensite, red = austenite) with the fluid colour at the faces. Right: surface/centre temperature and mean ξ histories, and the operating point on the ξ–T loop at σH. All frames come from the solved field run.', draw: (g, t, W, H) => {
+    const th = theme(), k = at(T, t), hot = t < tHeat, narrow = W < 640, z = fs(W), x0 = narrow ? 14 : 20, w = narrow ? W - 28 : Math.min(320, W * 0.38);
+    const yHead = para(g, hot ? `HOT fluid ${p.Tmax} °C — heating at σH = ${p.sigmaH} MPa` : `COLD fluid ${p.Tmin} °C — cooling at σL = ${p.sigmaL} MPa`, x0, 18, w, { size: z + 1, weight: 'bold', color: hot ? '#ef4444' : '#3b82f6', maxLines: 2 });
+    const y0 = yHead + 12, hh = narrow ? 170 : H - y0 - 64, bandH = hh / (2 * nX);
+    g.fillStyle = hot ? 'rgba(239,68,68,.35)' : 'rgba(59,130,246,.35)'; g.fillRect(x0, y0 - 12, w, 10); g.fillRect(x0, y0 + hh + 2, w, 10);
     for (let j = 0; j < 2 * nX; j++) { const i = j < nX ? nX - 1 - j : j - nX, xi = lerp(field.xi.map(r => r[i]), k); g.fillStyle = cssColor(cmap(1 - xi, 'coolwarm')); g.fillRect(x0, y0 + j * bandH, w, bandH + 0.5); }
     g.strokeStyle = th.fg; g.strokeRect(x0, y0, w, hh); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x0, y0 + hh / 2); g.lineTo(x0 + w, y0 + hh / 2); g.stroke(); g.setLineDash([]);
-    text(g, `thickness ${fmt(2 * Lhalf * 1e6, 3)} µm (not to scale) · mean ξ = ${fmt(lerp(xiMeanF, k), 3)}`, x0, y0 + hh + 34, th.mute);
-    const px = x0 + w + 30, pw = W - px - 16;
-    seriesPanel(g, { x: px, y: 10, w: pw, h: (H - 30) / 2, T, t, title: 'Temperature', unit: '°C', series: [{ name: 'surface', y: Ts, color: '#f97316' }, { name: 'mid-plane', y: Tcen, color: '#eab308' }], hlines: [{ y: tH.Af, label: 'A_f(σH)', color: '#ef4444' }, { y: tL.Mf, label: 'M_f(σL)', color: '#3b82f6' }] });
-    seriesPanel(g, { x: px, y: 20 + (H - 30) / 2, w: pw, h: (H - 30) / 2, T, t, title: 'Mean martensite fraction', unit: '–', series: [{ name: 'ξ', y: xiMeanF, color: '#a855f7' }], ymin: 0, ymax: 1 });
+    const yCap = para(g, `thickness ${fmt(2 * Lhalf * 1e6, 3)} µm (not to scale) · mean ξ = ${fmt(lerp(xiMeanF, k), 3)}`, x0, y0 + hh + 14 + z, w, { size: z - 1, color: th.mute, maxLines: 2 });
+    const px = narrow ? 10 : x0 + w + 24, pw = narrow ? W - 20 : W - px - 12, top = narrow ? yCap + 4 : 10, ph = (H - top - 20) / 2;
+    seriesPanel(g, { x: px, y: top, w: pw, h: ph, T, t, title: 'Temperature', unit: '°C', series: [{ name: 'surface', y: Ts, color: '#f97316' }, { name: 'mid-plane', y: Tcen, color: '#eab308' }], hlines: [{ y: tH.Af, label: 'A_f(σH)', color: '#ef4444' }, { y: tL.Mf, label: 'M_f(σL)', color: '#3b82f6' }] });
+    seriesPanel(g, { x: px, y: top + ph + 10, w: pw, h: ph, T, t, title: 'Mean martensite fraction', unit: '–', series: [{ name: 'ξ', y: xiMeanF, color: '#a855f7' }], ymin: 0, ymax: 1 });
   } });
 }

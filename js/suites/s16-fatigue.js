@@ -8,7 +8,7 @@
 //   fracture mechanics  Paris da/dN = C(ΔK_eff)^m, ΔK = YΔσ√(πa), Walker R-correction, threshold and K_Ic
 //   survival            two-parameter Weibull per ribbon; series and k-out-of-n redundancy across the cartridge
 import { fmt, linspace, logspace, range, clamp, min, max } from '../core/num.js';
-import { anim2d, seriesPanel, text, at, lerp } from '../core/anim2d.js';
+import { anim2d, seriesPanel, at, lerp, para, fs as fontPx } from '../core/anim2d.js';
 
 const LOG10 = Math.log10;
 // ASTM E1049-85 rainflow counting (three-point method) on a sequence of turning points. Returns [{range, mean, count}].
@@ -298,12 +298,12 @@ export default {
     out.recs.push({ level: 'econ', text: `Over ${p.dutyHours} h/yr the median engine life is ${fmt(sysRed50 / (p.freq * 3600 * p.dutyHours), 3)} years; ribbon replacement every ${fmt(lifeAt(Rsys, p.Rtarget) / (p.freq * 3600 * p.dutyHours), 3)} years at R = ${p.Rtarget} is the main maintenance cost driver for Suite 22.`, basis: 'Redundant-system Weibull life' });
     out.recs.push({ level: 'sustain', text: `Each cartridge replacement scraps ${fmt(nR * d.ribbonL * Wd * t * mat.rho * 1000, 3)} g of ${mat.name.split('(')[0].trim()} per cell (≈ ${fmt(mat.co2 || 0, 3)} kg CO₂e/kg embodied). Design grips for ribbon-only replacement and return failed ribbons for remelting (recyclable fraction ${fmt(100 * (mat.recyclable || 0), 2)} %).`, basis: 'Materials library' });
     out.recs.push({ level: 'warn', text: 'All lives use library-trend constants; before any durability claim, run functional-fatigue tests (stroke vs cycles) and S–N tests at the operating stress/strain/temperature, then calibrate N₀, a, b here.', basis: 'Master spec §31, §40 (fatigue may preclude high work density)' });
-    out.views.push({ label: '2D animation: stress cycle and damage hot spots on the ribbon', icon: '🎞', render: (el) => anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 * p.freq), label: 'cycle time', unit: 's', height: 400, explain: 'Top: nominal and grip-edge stress over the cycle. Bottom: the ribbon in plan view, coloured by the instantaneous local stress (K_t field × nominal stress); clamp lines at both ends. The brightest corners are the damage hot spots of the damage map.', draw(g, tt, W2, H2) {
+    out.views.push({ label: '2D animation: stress cycle and damage hot spots on the ribbon', icon: '🎞', render: (el) => anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 * p.freq), label: 'cycle time', unit: 's', height: (W) => W < 640 ? 440 : 400, explain: 'Top: nominal and grip-edge stress over the cycle. Bottom: the ribbon in plan view, coloured by the instantaneous local stress (K_t field × nominal stress); clamp lines at both ends. The brightest corners are the damage hot spots of the damage map.', draw(g, tt, W2, H2) {
       seriesPanel(g, { x: 8, y: 6, w: W2 - 16, h: H2 * 0.45, T: H.t, t: tt, title: 'Stress', unit: 'MPa', series: [{ name: 'nominal', y: H.s, color: '#38bdf8' }, { name: 'grip edge', y: sGrip, color: '#ef4444' }] });
-      const k = at(H.t, tt), sNow = lerp(H.s, k), x0 = 30, y0 = H2 * 0.55, w = W2 - 60, hh = Math.min(H2 * 0.3, w * Wd / L * 6), nxv = 120, nyv = 12, smax = KfEdge * sMaxNom * 1.05 || 1;
+      const k = at(H.t, tt), sNow = lerp(H.s, k), x0 = 24, y0 = H2 * 0.45 + 22, w = W2 - 48, hh = Math.min(H2 * 0.3, w * Wd / L * 6), nxv = 120, nyv = 12, smax = KfEdge * sMaxNom * 1.05 || 1;
       for (let i = 0; i < nxv; i++) for (let j = 0; j < nyv; j++) { const x = (i + 0.5) / nxv * L, y = (j + 0.5) / nyv * Wd, sl = (1 + p.qNotch * (KtAt(x, y) - 1)) * sNow, c = clamp(sl / smax, 0, 1); g.fillStyle = `rgb(${Math.round(30 + 225 * c)},${Math.round(40 + 120 * c * (1 - c) * 4 * 0.5)},${Math.round(120 * (1 - c))})`; g.fillRect(x0 + i * w / nxv, y0 + j * hh / nyv, w / nxv + 0.5, hh / nyv + 0.5); }
       g.fillStyle = '#9ca3af'; g.fillRect(x0 - 12, y0 - 6, 12, hh + 12); g.fillRect(x0 + w, y0 - 6, 12, hh + 12);
-      text(g, `σ_nominal ${fmt(sNow, 4)} MPa · peak at grip edge ${fmt(KfEdge * sNow, 4)} MPa · damage/cycle ${fmt(damagePerCycle, 3)}`, x0, y0 + hh + 24);
+      para(g, `σ_nominal ${fmt(sNow, 4)} MPa · peak at grip edge ${fmt(KfEdge * sNow, 4)} MPa · damage/cycle ${fmt(damagePerCycle, 3)}`, 12, y0 + hh + 14 + fontPx(W2), W2 - 24, { size: fontPx(W2), maxLines: 3 });
     } }) });
     out.outputs = { life_cycles: lifeMed, life_P10: P10, life_P90: P90, damagePerCycle, inspectInterval_cycles: inspectInterval, criticalLocation, life_years: yrs, systemLife_cycles: sysRed50, firstFailure_cycles: sysFirst50, governingMode: gov[0], epsTr };
     out.headline = `Median life ${fmt(lifeMed, 3)} cycles (${fmt(yrs, 3)} yr) — governed by ${gov[0].toLowerCase()}; P10 ${fmt(P10, 3)}, inspect every ${fmt(inspectInterval, 3)} cycles`;

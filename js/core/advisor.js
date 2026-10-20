@@ -24,7 +24,7 @@ export function contextRecs(suiteMeta, results, ctx) {
     const inf = ctx.inflation.value; recs.push({ level: 'econ', text: `Consumer-price inflation is ${fmt(inf, 3)} % (${ctx.inflation.year}). ${inf > 10 ? 'Lock material prices with forward contracts and shorten procurement cycles; evaluate costs in real (inflation-adjusted) terms.' : 'Use a real discount rate (nominal minus inflation) when comparing life-cycle costs.'}`, basis: 'World Bank FP.CPI.TOTL.ZG (live)' });
   }
   if (ctx.lendingRate?.value !== undefined && suiteMeta.econ) recs.push({ level: 'econ', text: `Commercial lending rate ≈ ${fmt(ctx.lendingRate.value, 3)} % (${ctx.lendingRate.year}); use it as the upper bound of the nominal discount rate for prototype financing.`, basis: 'World Bank FR.INR.LEND (live)' });
-  if (ctx.renewShare?.value !== undefined && suiteMeta.sustain) recs.push({ level: 'sustain', text: `Renewables supply ${fmt(ctx.renewShare.value, 3)} % of final energy consumption here (${ctx.renewShare.year}); include this in the life-cycle inventory of in-country manufacturing and maintenance.`, basis: 'World Bank EG.FEC.RNEW.ZS (live)' });
+  if (ctx.renewShare?.value !== undefined && suiteMeta.sustain) recs.push({ level: 'sustain', text: `Renewables generate ${fmt(ctx.renewShare.value, 3)} % of electricity here (${ctx.renewShare.year}); include this in the life-cycle inventory of in-country manufacturing and maintenance.`, basis: 'World Bank EG.ELC.RNEW.ZS (live)' });
   return recs;
 }
 

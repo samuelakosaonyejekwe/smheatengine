@@ -59,8 +59,8 @@ export const store = {
   setParam(id, key, value, prov = 'user') { this.params(id)[key] = value; this.prov(id)[key] = prov; if (prov === 'user') delete this.autoKeys(id)[key]; this.invalidate(id, `${key} changed`); this.touch({ type: 'param', id, key }); },
   setMaterial(component, matId) { this.project.materials[component] = matId; this.invalidateAll(`material of ${component}`); this.touch({ type: 'material', component }); },
   material(component, fallback) { return this.project.materials[component] || fallback; },
-  publish(id, data, { credibility = 'Analytical screening', hash = '' } = {}) {
-    this.project.outputs[id] = { t: Date.now(), hash, credibility, data, stale: false };
+  publish(id, data, { credibility = 'Analytical screening', hash = '', summary = null } = {}) {
+    this.project.outputs[id] = { t: Date.now(), hash, credibility, data, stale: false, summary };
     for (const d of dependents(id)) this.invalidate(d, `upstream ${id} re-computed`, false);
     this.touch({ type: 'output', id });
   },
@@ -119,5 +119,13 @@ function schedule() {
   }, 400);
 }
 
+// Compact record of a run for reports and the dossier: headline, leading KPIs, verdict and check counts
+export function summarize(res) {
+  const v = res.verdicts || [], c = res.checks || [];
+  return { headline: typeof res.headline === 'string' ? res.headline : '', headlineKind: res.headlineKind || '',
+    kpis: (res.kpis || []).slice(0, 12).map(k => ({ label: k.label, value: typeof k.value === 'number' ? +k.value.toPrecision(5) : String(k.value ?? ''), unit: k.unit || '', prov: k.prov || '', status: k.status || '' })),
+    verdicts: v.map(x => ({ test: x.test, status: x.status || (x.pass ? 'pass' : 'fail'), fix: x.fix || '' })).slice(0, 30),
+    checks: { total: c.length, failed: c.filter(x => x.pass === false).length }, recs: (res.recs || []).slice(0, 8).map(r => ({ level: r.level, text: r.text })) };
+}
 // Simple stable hash for reproducibility records
 export function hashObj(o) { const s = JSON.stringify(o, Object.keys(o || {}).sort()); let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); }

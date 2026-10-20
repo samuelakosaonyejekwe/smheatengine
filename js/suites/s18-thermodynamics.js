@@ -7,7 +7,7 @@
 // confidence intervals of net power and efficiency, and every “100×” statement is forced into a declaration table.
 import { fmt, linspace, clamp, mean, min, max, percentile, histogram, cumtrapz } from '../core/num.js';
 import { propagate } from '../core/analysis.js';
-import { anim2d, seriesPanel, bar as barG, text } from '../core/anim2d.js';
+import { anim2d, seriesPanel, bar as barG, label } from '../core/anim2d.js';
 
 const K = 273.15;
 const pause = async (ctx) => { try { if (typeof requestAnimationFrame === 'function') await ctx.yield(); else await new Promise(r => setTimeout(r, 0)); } catch { /* advisory */ } };
@@ -268,13 +268,14 @@ export default {
     out.recs.push({ level: 'sustain', text: `${fmt(QrejAll, 4)} W is rejected to the sink at ${d.Tc} °C. Pair the engine with genuine waste heat and a sink that is not actively chilled; an actively cooled sink would cost more exergy than the engine produces at ${fmt(100 * eta, 3)} % efficiency.`, basis: 'Exergy balance' });
     if (!M) out.recs.push({ level: 'warn', text: 'No measured enthalpy flows or shaft power are imported. Install calibrated heat-flow meters on hot and cold loops, a torque/speed dynamometer at the shaft station and power meters on every auxiliary; import the logs here.', basis: 'Master spec §34 and Module 18 evidence' });
     // ---- view
-    out.views.push({ label: '2D animation: energy flows through the cycle', icon: '🎞', render: (el) => anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 * f), label: 'cycle time', unit: 's', height: 400, explain: 'Interface heat flow and mechanical power of one cell over its cycle with running energy totals; the bars on the right show the engine-level energy and exergy books.', draw(g, t, W, Hh) {
-      const pw = W * 0.62, ph = (Hh - 20) / 2;
-      seriesPanel(g, { x: 8, y: 6, w: pw, h: ph - 6, T: H.t, t, title: 'Heat flow into the cell', unit: 'W', series: [{ name: 'q', y: H.qIn, color: '#ef4444' }] });
-      seriesPanel(g, { x: 8, y: 6 + ph, w: pw, h: ph - 6, T: H.t, t, title: 'Running totals per cell', unit: 'J', series: [{ name: 'heat in', y: cumQ, color: '#f97316' }, { name: 'heat out', y: cumR, color: '#38bdf8' }, { name: 'work ×100', y: cumW.map(w => 100 * w), color: '#22c55e' }] });
-      const bx = pw + 24, bw = W - bx - 10, top = Qhot || 1; let y = 16;
-      text(g, 'Engine books [W]', bx, y); y += 10;
-      for (const [lab, v, col] of [['Q_hot', Qhot, '#f97316'], ['P_gross', Pgross, '#a855f7'], ['P_aux', Paux, '#eab308'], ['P_net', Pnet, '#22c55e'], ['X_in', Xin, '#38bdf8'], ['X_destroyed', Xd, '#ef4444']]) { barG(g, { x: bx, y, w: bw, h: 16, value: v, max: top, label: lab, color: col }); y += 24; }
+    out.views.push({ label: '2D animation: energy flows through the cycle', icon: '🎞', render: (el) => anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 * f), label: 'cycle time', unit: 's', height: (W) => W < 640 ? 660 : 420, explain: 'Interface heat flow and mechanical power of one cell over its cycle with running energy totals; the bars on the right show the engine-level energy and exergy books.', draw(g, t, W, Hh) {
+      const narrow = W < 640, books = [['Q_hot', Qhot, '#f97316'], ['P_gross', Pgross, '#a855f7'], ['P_aux', Paux, '#eab308'], ['P_net', Pnet, '#22c55e'], ['X_in', Xin, '#38bdf8'], ['X_destroyed', Xd, '#ef4444']];
+      const booksH = 26 + books.length * 24, pw = narrow ? W - 16 : W * 0.62, ph = ((narrow ? Hh - booksH - 8 : Hh) - 12) / 2;
+      seriesPanel(g, { x: 8, y: 6, w: pw, h: ph - 4, T: H.t, t, title: 'Heat flow into the cell', unit: 'W', series: [{ name: 'q', y: H.qIn, color: '#ef4444' }] });
+      seriesPanel(g, { x: 8, y: 6 + ph, w: pw, h: ph - 4, T: H.t, t, title: 'Running totals per cell', unit: 'J', series: [{ name: 'heat in', y: cumQ, color: '#f97316' }, { name: 'heat out', y: cumR, color: '#38bdf8' }, { name: 'work ×100', y: cumW.map(w => 100 * w), color: '#22c55e' }] });
+      const bx = narrow ? 10 : pw + 24, bw = W - bx - 10, top = Qhot || 1; let y = narrow ? 6 + 2 * ph + 6 : 10;
+      label(g, 'Engine books [W]', bx, y, { baseline: 'top', weight: '600', maxW: bw }); y += 22;
+      for (const [lab, v, col] of books) { barG(g, { x: bx, y, w: bw, h: 18, value: v, max: top, label: lab, unit: ' W', color: col }); y += 24; }
     } }) });
     out.outputs = { Pnet_W: Pnet, Pgross_W: Pgross, Paux_W: Paux, Qhot_W: Qhot, eta, etaC, carnotFraction: cf, exergyDestroyed_W: Xd, residual, Pshaft_W: Pshaft, Qrej_W: QrejAll, etaCA, exergyEff: exEff, Sgen_WK: Sgen, pActive_Wkg: E.pActive, PnetCI95: ciP, etaCI95: ciEta, pActiveCI95: ciSp, destruction: Object.fromEntries(comps) };
     out.headline = `P_net ${fmt(Pnet, 4)} W ${M ? `model / ${fmt(PshN - PauxN, 4)} W measured` : ''} (95 % CI ${fmt(ciP[0], 3)}…${fmt(ciP[1], 3)}) from ${fmt(Qhot, 4)} W heat — η ${fmt(100 * eta, 3)} % = ${fmt(100 * cf, 3)} % of Carnot; ${fmt(Xd, 4)} W exergy destroyed`;

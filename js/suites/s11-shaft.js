@@ -140,11 +140,14 @@ export function drawRotor(g, { cx, cy, r, theta, N, act = [], tau = [], tauMax =
     const hc = clamp(heat[i] ?? 0, 0, 1); g.strokeStyle = `rgb(${Math.round(60 + 195 * hc)},${Math.round(130 - 60 * hc)},${Math.round(240 - 200 * hc)})`; g.lineWidth = 6;
     g.beginPath(); g.moveTo(cx + ca * r0, cy + sa * r0); g.lineTo(cx + ca * r1, cy + sa * r1); g.stroke();
     const tq = tau[i] ?? 0; if (tq > 1e-9) { const L = 8 + 40 * clamp(tq / (tauMax || 1), 0, 1.5), px = cx + ca * r, py = cy + sa * r; g.lineWidth = 2.5; g.strokeStyle = g.fillStyle = '#22c55e'; g.beginPath(); g.moveTo(px, py); const ex = px - sa * L, ey = py + ca * L; g.lineTo(ex, ey); g.stroke(); const ang = Math.atan2(ey - py, ex - px); g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - 8 * Math.cos(ang - 0.4), ey - 8 * Math.sin(ang - 0.4)); g.lineTo(ex - 8 * Math.cos(ang + 0.4), ey - 8 * Math.sin(ang + 0.4)); g.closePath(); g.fill(); }
-    g.fillStyle = th.mute; g.font = '10px Inter,system-ui,sans-serif'; g.fillText(String(i + 1), cx + ca * (r1 + 10) - 4, cy + sa * (r1 + 10) + 4);
+    const rl = r * 1.67 + 9; g.fillStyle = th.mute; g.font = `${N > 16 ? 9 : 10}px Inter,system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), cx + ca * rl, cy + sa * rl);
   }
-  if (label) { g.fillStyle = th.fg; g.font = '12px Inter,system-ui,sans-serif'; g.fillText(label, cx - r, cy + r * 1.95); }
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  if (label) { g.fillStyle = th.fg; g.font = '600 12px Inter,system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(label, cx, cy + r * 1.67 + 20); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; }
   g.restore();
 }
+// largest rotor radius whose cells, numbers and caption fit a w × h box (see drawRotor)
+export const rotorFit = (w, h, caption = true) => Math.max(8, Math.min((w / 2 - 12) / 1.67 - 6, ((h - (caption ? 22 : 0)) / 2 - 12) / 1.67 - 6));
 
 const COUPLINGS = [{ value: 'sprag', label: 'One-way sprag clutch + rocker (preferred laboratory option)' }, { value: 'cam', label: 'Cam follower (roller follower on a multi-lobe cam)' }, { value: 'cable', label: 'Cable / pulley with one-way hub' }];
 
@@ -385,12 +388,14 @@ export default {
     if (aT.length > 2) out.views.push({ label: 'Rotor animation', icon: '⚙', render: async (el) => {
       const { anim2d, at, lerp, seriesPanel, theme } = await import('../core/anim2d.js');
       const tW = aW.map(t => t - t0c), tot = aTau.map(v => v.reduce((a, b) => a + b, 0));
-      anim2d(el, { duration: aT[aT.length - 1], label: 'Steady window time', unit: 's', height: 440, explain: 'Rotor with cells arranged around it: red cells are heated, green arrows are the tangential torque each engaged cell applies through its one-way coupling; the right panels show shaft speed and total drive torque with a sweeping cursor.', draw: (g, t, W, Hh) => {
-        const th = theme(), k = at(aT, t), kw = at(tW, t), ang = lerp(aTh, kw), ph = (t + t0c) / P;
+      anim2d(el, { duration: aT[aT.length - 1], label: 'Steady window time', unit: 's', height: (W) => W < 640 ? 720 : 440, explain: 'Rotor with cells arranged around it: red cells are heated, green arrows are the tangential torque each engaged cell applies through its one-way coupling; the right panels show shaft speed and total drive torque with a sweeping cursor.', draw: (g, t, W, Hh) => {
+        const th = theme(), k = at(aT, t), kw = at(tW, t), ang = lerp(aTh, kw), ph = (t + t0c) / P, narrow = W < 640;
         const heat = range(N).map(i => { const q = ((ph + offsets[i]) % 1 + 1) % 1; return q < d.dutyHot ? 1 : 0; });
-        drawRotor(g, { cx: W * 0.27, cy: Hh * 0.45, r: Math.min(W * 0.14, Hh * 0.22), theta: ang, N, act: range(N).map(i => (aTau[k.i][i] || 0) / (tauMx || 1)), tau: aTau[k.i], tauMax: tauMx, heat, label: `ω = ${fmt(lerp(aWv, kw) * 60 / TAU, 4)} rpm`, th });
-        seriesPanel(g, { x: W * 0.55, y: 10, w: W * 0.43, h: Hh / 2 - 15, T: tW, series: [{ name: 'speed', y: aWv.map(w => w * 60 / TAU), color: th.accent }], t, title: 'Shaft speed', unit: 'rpm' });
-        seriesPanel(g, { x: W * 0.55, y: Hh / 2 + 5, w: W * 0.43, h: Hh / 2 - 15, T: aT, series: [{ name: 'Σ τ', y: tot, color: '#22c55e' }], t, title: 'Drive torque', unit: 'N·m', hlines: [{ y: loadRef * shape(wMean), label: 'load', color: '#ef4444' }] });
+        const aw = narrow ? W : W * 0.52, ah = narrow ? 330 : Hh, r = rotorFit(aw, ah), cy = (ah - 22) / 2;
+        drawRotor(g, { cx: aw / 2, cy, r, theta: ang, N, act: range(N).map(i => (aTau[k.i][i] || 0) / (tauMx || 1)), tau: aTau[k.i], tauMax: tauMx, heat, label: `ω = ${fmt(lerp(aWv, kw) * 60 / TAU, 4)} rpm`, th });
+        const px = narrow ? 10 : W * 0.55, pw = narrow ? W - 20 : W * 0.43, py = narrow ? ah : 10, ph2 = (Hh - py - 20) / 2;
+        seriesPanel(g, { x: px, y: py, w: pw, h: ph2, T: tW, series: [{ name: 'speed', y: aWv.map(w => w * 60 / TAU), color: th.accent }], t, title: 'Shaft speed', unit: 'rpm' });
+        seriesPanel(g, { x: px, y: py + ph2 + 10, w: pw, h: ph2, T: aT, series: [{ name: 'Σ τ', y: tot, color: '#22c55e' }], t, title: 'Drive torque', unit: 'N·m', hlines: [{ y: loadRef * shape(wMean), label: 'load', color: '#ef4444' }] });
       } });
     } });
     out.outputs = { transEff: transEffNoBearing, torqueMean_Nm: tqMean, torqueRipple: ripple, Pshaft_W: Pload, Ploss_W: Ploss, J_kgm2: Jtot, omega_rads: wMean, startTorque_Nm: startTorque, gearRatio: G, effRadius_m: R0, loadTorque_Nm: loadRef, loadType: p.loadType, tauStatic_Nm: tauS, tauC_Nm: p.tauC };

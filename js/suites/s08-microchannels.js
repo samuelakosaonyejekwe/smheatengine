@@ -11,7 +11,7 @@ import { SMA } from '../core/sma.js';
 import { get as getMat, forUse, componentMaterial, smaAlloys } from '../core/materials.js';
 import { fmt, clamp, linspace, gci as gciFn, max } from '../core/num.js';
 import { cmap, cssColor, download } from '../core/chart.js';
-import { anim2d, seriesPanel, bar, theme } from '../core/anim2d.js';
+import { anim2d, seriesPanel, bar, theme, label, fs as fontPx } from '../core/anim2d.js';
 
 const yieldTo = (ctx) => (typeof requestAnimationFrame === 'function' ? ctx.yield() : Promise.resolve());
 const designOf = (ctx) => ({ ...ctx.engine, ...(ctx.upstream('s01')?.design || {}) });
@@ -323,14 +323,17 @@ export default {
     // ---------- animation ----------
     const snaps = H.r.snaps.concat(C.r.snaps.map(s => ({ t: s.t + H.r.t[H.r.t.length - 1], T: s.T, cold: true })));
     const xiOf = (T, cold) => (cold ? cosK(band(MsL - T, 0, MsL - MfL)) : 1 - cosK(band(T, AsH, AfH)));
-    out.views.push({ label: 'Heating / cooling animation', icon: '🎞', render: (el) => anim2d(el, { duration: tAll[tAll.length - 1], label: 'Time', unit: 's', height: 460, explain: 'Unit-cell temperature field (mirrored about the ribbon mid-plane) through the hot and cold phases, with the ribbon temperatures, fluid temperature and the transformed (martensite) fraction estimated from the mean ribbon temperature.', draw(g, tt, W, Hh) {
-      const th = theme(), sn = snaps.reduce((a, b) => (Math.abs(b.t - tt) < Math.abs(a.t - tt) ? b : a)), col = (u) => cssColor(cmap(u, 'inferno'));
-      ML.paintField(g, mesh, sn.T, { x: 10, y: 34, w: W * 0.52, h: Hh - 90, lo: Tc, hi: Th, color: col, mirror: true });
-      const hot = !sn.cold; g.fillStyle = hot ? '#ef4444' : '#3b82f6'; g.fillText(`${hot ? 'HOT' : 'COLD'} fluid · t = ${fmt(sn.t, 4)} s`, 12, 20);
-      for (let k2 = 0; k2 <= 50; k2++) { g.fillStyle = col(k2 / 50); g.fillRect(14 + k2 * 4, Hh - 46, 4, 10); } g.fillStyle = th.mute; g.fillText(`${Tc} °C`, 14, Hh - 24); g.fillText(`${Th} °C`, 200, Hh - 24);
+    out.views.push({ label: 'Heating / cooling animation', icon: '🎞', render: (el) => anim2d(el, { duration: tAll[tAll.length - 1], label: 'Time', unit: 's', height: (W) => W < 640 ? 780 : 460, explain: 'Unit-cell temperature field (mirrored about the ribbon mid-plane) through the hot and cold phases, with the ribbon temperatures, fluid temperature and the transformed (martensite) fraction estimated from the mean ribbon temperature.', draw(g, tt, W, Hh) {
+      const th = theme(), sn = snaps.reduce((a, b) => (Math.abs(b.t - tt) < Math.abs(a.t - tt) ? b : a)), col = (u) => cssColor(cmap(u, 'inferno')), narrow = W < 640, z = fontPx(W), fw = narrow ? W - 20 : W * 0.52;
+      const hot = !sn.cold; label(g, `${hot ? 'HOT' : 'COLD'} fluid · t = ${fmt(sn.t, 4)} s`, 12, 10, { baseline: 'top', size: z + 1, weight: '600', maxW: fw, color: hot ? '#ef4444' : '#3b82f6' });
+      const fy = 32, fh = narrow ? 300 : Hh - fy - 70;
+      ML.paintField(g, mesh, sn.T, { x: 10, y: fy, w: fw, h: fh, lo: Tc, hi: Th, color: col, mirror: true });
+      const cbW = Math.min(200, fw - 20), cy = fy + fh + 6; for (let k2 = 0; k2 <= 50; k2++) { g.fillStyle = col(k2 / 50); g.fillRect(14 + k2 * cbW / 51, cy, cbW / 51 + 0.5, 10); }
+      label(g, `${Tc} °C`, 14, cy + 12, { baseline: 'top', size: z - 1, color: th.mute }); label(g, `${Th} °C`, 14 + cbW, cy + 12, { align: 'right', baseline: 'top', size: z - 1, color: th.mute });
       const iT = Math.min(tAll.length - 1, tAll.findIndex(v => v >= tt) < 0 ? tAll.length - 1 : tAll.findIndex(v => v >= tt)), Tm = cat(H.r.stats.ribbon.mean, C.r.stats.ribbon.mean)[iT];
-      bar(g, { x: 14, y: Hh - 18, w: W * 0.5 - 20, value: xiOf(Tm, iT >= H.r.t.length), max: 1, label: 'martensite fraction (from ribbon mean T)', color: '#c58b4b' });
-      seriesPanel(g, { x: W * 0.55, y: 10, w: W * 0.43, h: Hh - 20, T: tAll, t: tt, title: 'Temperatures', unit: '°C', series: [{ name: 'ribbon mean', y: cat(H.r.stats.ribbon.mean, C.r.stats.ribbon.mean), color: '#f59e0b' }, { name: 'plate mean', y: cat(H.r.stats.wall.mean, C.r.stats.wall.mean), color: '#94a3b8' }, { name: 'fluid', y: cat(H.tf, C.tf), color: '#38bdf8' }], hlines: [{ y: AfH, label: 'Af(σH)', color: '#ef4444' }, { y: MfL, label: 'Mf(σL)', color: '#3b82f6' }] });
+      bar(g, { x: 14, y: cy + 30, w: fw - 8, h: 16, value: xiOf(Tm, iT >= H.r.t.length), max: 1, label: 'martensite fraction (from ribbon mean T)', color: '#c58b4b' });
+      const py = narrow ? cy + 56 : 10;
+      seriesPanel(g, { x: narrow ? 10 : W * 0.55, y: py, w: narrow ? W - 20 : W * 0.43, h: Hh - py - 10, T: tAll, t: tt, title: 'Temperatures', unit: '°C', series: [{ name: 'ribbon mean', y: cat(H.r.stats.ribbon.mean, C.r.stats.ribbon.mean), color: '#f59e0b' }, { name: 'plate mean', y: cat(H.r.stats.wall.mean, C.r.stats.wall.mean), color: '#94a3b8' }, { name: 'fluid', y: cat(H.tf, C.tf), color: '#38bdf8' }], hlines: [{ y: AfH, label: 'Af(σH)', color: '#ef4444' }, { y: MfL, label: 'Mf(σL)', color: '#3b82f6' }] });
     } }) });
     out.views.push({ label: 'Unit-cell mesh', icon: '🕸', render: (el) => { el.innerHTML = `<p class="small muted">Production mesh (structured, graded; channel walls in blue).</p>${ML.meshSVG(mesh)}`; } });
     out.exports.push(

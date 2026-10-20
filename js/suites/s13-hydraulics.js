@@ -275,20 +275,21 @@ export default {
 };
 
 async function animDistributor(el, A) {
-  const [{ anim2d, seriesPanel, text, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
+  const [{ anim2d, seriesPanel, label, fs, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
   const T = A.inst.map(t => t * A.period);
-  anim2d(el, { duration: A.period, rate: A.period / 6, label: 'Time in engine cycle', unit: 's', height: 420, explain: 'Solved distributor schedule: each wedge is a cell; red = connected to the hot header, blue = cold, brightness = solved flow relative to design. Lower panels: total pump flows and hot pump pressure at each distributor position (step-wise between solved instants).', draw(g, t, W, H) {
-    const th = theme(), k = Math.min(A.inst.length - 1, Math.floor(t / A.period * A.inst.length)), cx = Math.min(W * 0.25, 170), cy = 130, R = 100;
+  anim2d(el, { duration: A.period, rate: A.period / 6, label: 'Time in engine cycle', unit: 's', height: (W) => W < 640 ? 700 : 440, explain: 'Solved distributor schedule: each wedge is a cell; red = connected to the hot header, blue = cold, brightness = solved flow relative to design. Lower panels: total pump flows and hot pump pressure at each distributor position (step-wise between solved instants).', draw(g, t, W, H) {
+    const th = theme(), z = fs(W), narrow = W < 640, k = Math.min(A.inst.length - 1, Math.floor(t / A.period * A.inst.length));
+    const aw = narrow ? W : Math.min(W * 0.3, 300), ah = narrow ? 290 : H - 30, R = Math.max(30, Math.min(aw / 2 - 30, ah / 2 - 30)), cx = aw / 2, cy = narrow ? ah / 2 : Math.min(ah / 2, R + 40);
     for (let i = 0; i < A.N; i++) {
       const a0 = 2 * Math.PI * (i / A.N) - Math.PI / 2, a1 = a0 + 2 * Math.PI / A.N, hot = A.hot[k][i] > 0, v = hot ? A.hot[k][i] : A.cold[k][i];
       const c = cmap(clamp(0.35 + 0.5 * (v - 0.8) / 0.4, 0, 1), hot ? 'inferno' : 'viridis');
       g.fillStyle = `rgb(${c.map(Math.round).join(',')})`; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath(); g.fill(); g.strokeStyle = th.bg; g.stroke();
-      const am = (a0 + a1) / 2; text(g, `${i + 1}`, cx + (R + 10) * Math.cos(am) - 5, cy + (R + 10) * Math.sin(am) + 4, th.mute);
+      const am = (a0 + a1) / 2; label(g, `${i + 1}`, cx + (R + 12) * Math.cos(am), cy + (R + 12) * Math.sin(am), { align: 'center', baseline: 'middle', size: A.N > 18 ? 9 : z - 1, color: th.mute });
     }
-    g.fillStyle = th.bg2; g.beginPath(); g.arc(cx, cy, R * 0.35, 0, 7); g.fill(); text(g, `pos ${k + 1}/${A.inst.length}`, cx - 26, cy + 4, th.fg);
-    const x0 = cx + R + 40, w = W - x0 - 10, ph = (H - 30) / 2 - 6;
-    seriesPanel(g, { x: x0, y: 10, w, h: ph, T, t, title: 'Pump flows', unit: 'L/min', series: [{ name: 'hot', y: A.Qh, color: '#ef4444' }, { name: 'cold', y: A.Qc, color: '#38bdf8' }] });
-    seriesPanel(g, { x: x0, y: 20 + ph, w, h: ph, T, t, title: 'Hot pump Δp', unit: 'kPa', series: [{ name: 'Δp', y: A.dph, color: '#f59e0b' }] });
-    text(g, 'red: hot header · blue/green: cold header · brighter = more flow', 10, H - 8, th.mute);
+    g.fillStyle = th.bg2; g.beginPath(); g.arc(cx, cy, R * 0.38, 0, 7); g.fill(); label(g, `pos ${k + 1}/${A.inst.length}`, cx, cy, { align: 'center', baseline: 'middle', size: z, maxW: R * 0.72 });
+    const x0 = narrow ? 10 : aw + 10, w = W - x0 - 10, py = narrow ? ah : 10, ph = (H - py - 34) / 2;
+    seriesPanel(g, { x: x0, y: py, w, h: ph, T, t, title: 'Pump flows', unit: 'L/min', series: [{ name: 'hot', y: A.Qh, color: '#ef4444' }, { name: 'cold', y: A.Qc, color: '#38bdf8' }] });
+    seriesPanel(g, { x: x0, y: py + ph + 8, w, h: ph, T, t, title: 'Hot pump Δp', unit: 'kPa', series: [{ name: 'Δp', y: A.dph, color: '#f59e0b' }] });
+    label(g, 'red: hot header · blue/green: cold header · brighter = more flow', 10, H - 8, { size: z - 1, color: th.mute, maxW: W - 20 });
   } });
 }

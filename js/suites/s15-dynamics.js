@@ -5,7 +5,7 @@
 // and the energy needed to re-preload the ribbons for the next start (never assumed free).
 import { linspace, range, mean, clamp, fmt, brent } from '../core/num.js';
 import { get as getMat } from '../core/materials.js';
-import { cellDrive, scaleDrive, ribbonStiffness, driveLookup, simulateShaft, constantSpeedCell, designGear, effRadius, drawRotor, pause } from './s11-shaft.js';
+import { cellDrive, scaleDrive, ribbonStiffness, driveLookup, simulateShaft, constantSpeedCell, designGear, effRadius, drawRotor, rotorFit, pause } from './s11-shaft.js';
 
 const TAU = 2 * Math.PI, f3 = (v) => fmt(v, 3), f4 = (v) => fmt(v, 4);
 
@@ -287,18 +287,21 @@ export default {
       const tEndA = Math.min(tA[tA.length - 1], Number.isFinite(tStop) ? tStop + 5 : tEnd), phaseName = (t) => t < tReady ? 'Warm-up: hot loop heating' : (!Number.isFinite(A1.tBreak) || t < A1.tBreak) ? 'Start cells heated — building torque' : t < (A1.tSeq ?? Infinity) ? 'Breakaway' : (!Number.isFinite(tSteady) || t < tSteady) ? 'Accelerating — phase sequencing' : t < tSD ? 'Steady running' : (!Number.isFinite(tStop) || t < tStop) ? 'Shutdown — hot isolated, decelerating' : 'Parked';
       const actAt = (i, t) => { const o = { xf: 0, fc: 0, vf: 0 }; drive(i, t, o); return o; };
       out.views.push({ label: 'Start-up animation', icon: '🚦', render: async (el) => {
-        const { anim2d, at, lerp, seriesPanel, theme, bar } = await import('../core/anim2d.js');
+        const { anim2d, at, lerp, seriesPanel, theme, bar, label, fs } = await import('../core/anim2d.js');
         // replay the activation schedule recorded by the last simulation
-        anim2d(el, { duration: tEndA, rate: tEndA / 20, label: 'Time from pump start', unit: 's', height: 460, explain: 'Time-lapse of the start sequence: circuit temperatures, cells heated (red) and pushing (green arrows), shaft speed, and the operating phase banner from warm-up to parking.', draw: (g, t, W, Hh) => {
-          const th = theme(), k = at(tA, t), w = lerp(wA, k), ang = lerp(thA, k);
+        anim2d(el, { duration: tEndA, rate: tEndA / 20, label: 'Time from pump start', unit: 's', height: (W) => W < 640 ? 820 : 470, explain: 'Time-lapse of the start sequence: circuit temperatures, cells heated (red) and pushing (green arrows), shaft speed, and the operating phase banner from warm-up to parking.', draw: (g, t, W, Hh) => {
+          const th = theme(), k = at(tA, t), w = lerp(wA, k), ang = lerp(thA, k), narrow = W < 640, z = fs(W);
           const act = range(N).map(i => actAt(i, t)), heat = act.map(o => o.fc > 0 || o.xf > 0 ? 1 : 0);
-          drawRotor(g, { cx: W * 0.22, cy: Hh * 0.42, r: Math.min(W * 0.12, Hh * 0.2), theta: ang, N, act: act.map(o => o.xf / Math.max(design.dr.xwMax, 1e-9)), tau: act.map(o => o.fc > 0 ? o.fc * R * eta : 0), tauMax: design.dr.Fload * R * eta, heat, label: `${fmt(w * 60 / TAU, 3)} rpm`, th });
-          g.fillStyle = th.fg; g.font = 'bold 14px Inter,system-ui,sans-serif'; g.fillText(phaseName(t), 12, 20); g.font = '12px Inter,system-ui,sans-serif';
-          bar(g, { x: 12, y: Hh - 64, w: W * 0.36, value: t < tSD ? Thot(t) : Thot(tSD), max: p.Th + 10, label: 'Hot loop', unit: ' °C', color: '#ef4444' });
-          bar(g, { x: 12, y: Hh - 44, w: W * 0.36, value: Tcold(t), max: p.Th + 10, label: 'Cold loop', unit: ' °C', color: '#38bdf8' });
-          bar(g, { x: 12, y: Hh - 24, w: W * 0.36, value: lerp(engA, k), max: N, label: 'Cells pushing', unit: '', color: '#22c55e' });
-          seriesPanel(g, { x: W * 0.45, y: 8, w: W * 0.53, h: Hh / 2 - 12, T: tA, series: [{ name: 'speed', y: wA.map(v => v * 60 / TAU), color: th.accent }], t, title: 'Shaft speed', unit: 'rpm', hlines: [{ y: p.rpm, label: 'design', color: '#a855f7' }] });
-          seriesPanel(g, { x: W * 0.45, y: Hh / 2 + 4, w: W * 0.53, h: Hh / 2 - 12, T: tA, series: [{ name: 'drive', y: tqA, color: '#22c55e' }], t, title: 'Drive torque', unit: 'N·m', hlines: [{ y: tauS, label: 'static friction', color: '#ef4444' }] });
+          const aw = narrow ? W : W * 0.42; label(g, phaseName(t), 12, 10, { baseline: 'top', size: z + 2, weight: 'bold', maxW: aw - 24 });
+          const ah = narrow ? 300 : Hh - 110, r = rotorFit(aw, ah - 30);
+          drawRotor(g, { cx: aw / 2, cy: 30 + (ah - 30 - 22) / 2, r, theta: ang, N, act: act.map(o => o.xf / Math.max(design.dr.xwMax, 1e-9)), tau: act.map(o => o.fc > 0 ? o.fc * R * eta : 0), tauMax: design.dr.Fload * R * eta, heat, label: `${fmt(w * 60 / TAU, 3)} rpm`, th });
+          const by = ah + 8, bw = aw - 24;
+          bar(g, { x: 12, y: by, w: bw, h: 18, value: t < tSD ? Thot(t) : Thot(tSD), max: p.Th + 10, label: 'Hot loop', unit: ' °C', color: '#ef4444' });
+          bar(g, { x: 12, y: by + 24, w: bw, h: 18, value: Tcold(t), max: p.Th + 10, label: 'Cold loop', unit: ' °C', color: '#38bdf8' });
+          bar(g, { x: 12, y: by + 48, w: bw, h: 18, value: lerp(engA, k), max: N, label: 'Cells pushing', unit: '', color: '#22c55e' });
+          const px = narrow ? 10 : W * 0.45, pw = narrow ? W - 20 : W * 0.53, py = narrow ? by + 78 : 8, ph = (Hh - py - 16) / 2;
+          seriesPanel(g, { x: px, y: py, w: pw, h: ph, T: tA, series: [{ name: 'speed', y: wA.map(v => v * 60 / TAU), color: th.accent }], t, title: 'Shaft speed', unit: 'rpm', hlines: [{ y: p.rpm, label: 'design', color: '#a855f7' }] });
+          seriesPanel(g, { x: px, y: py + ph + 8, w: pw, h: ph, T: tA, series: [{ name: 'drive', y: tqA, color: '#22c55e' }], t, title: 'Drive torque', unit: 'N·m', hlines: [{ y: tauS, label: 'static friction', color: '#ef4444' }] });
         } });
       } });
     }

@@ -11,7 +11,7 @@ import { get as getMat, componentMaterial, smaAlloys } from '../core/materials.j
 import { fmt, histogram, range, sum, clamp } from '../core/num.js';
 import { download, cmap, cssColor } from '../core/chart.js';
 import { zip, parseMSH, parseVTK, parseSTL } from '../core/io.js';
-import { anim2d, seriesPanel, theme } from '../core/anim2d.js';
+import { anim2d, seriesPanel, theme, label, para, fs as fontPx } from '../core/anim2d.js';
 
 const yieldTo = (ctx) => (typeof requestAnimationFrame === 'function' ? ctx.yield() : Promise.resolve());
 const designOf = (ctx) => ({ ...ctx.engine, ...(ctx.upstream('s01')?.design || {}) });
@@ -89,6 +89,41 @@ function sectionSVG(sec, g) {
   dim(sec.W + 0.02 * sec.W, -yR, sec.W + 0.02 * sec.W, yR, `t ${fmt(sec.t * 1e6, 3)} µm, contact ${fmt(sec.tc * 1e6, 3)} µm`, true);
   o += `<text x="40" y="22" font-size="13" font-weight="700">Section A–A: ribbon between ${sec.plate} microchannel plates (${g.nChPlate} channels across the ${fmt(g.w * 1e3, 3)} mm ribbon)</text><text x="40" y="${H - 12}" font-size="10" fill="#334155">Ribbon (bronze) · contact layer (grey) · plate (light grey) · coolant channel (blue). Dimensions in mm unless stated; unit cell repeats across the width.</text></svg>`;
   return o;
+}
+
+// Complete parametric geometry of the radial multicell engine from resolved suite parameters (shared with the dossier
+// generator so drawings and analyses always use identical solids). Lengths SI.
+export function buildEngineGeometry(p, { alloy, stroke05 } = {}) {
+    const N = Math.max(3, Math.round(p.nCells)), nRib = Math.max(1, Math.round(p.nRib)), L = p.L_mm / 1e3, w = p.w_mm / 1e3, t = p.t_um / 1e6, chW = p.chW_mm / 1e3, chH = p.chH_mm / 1e3, web = p.web_mm / 1e3, skin = p.skin_mm / 1e3, tc = p.tc_um / 1e6;
+    const nPlates = p.plate === 'dedicated' ? 2 * nRib : nRib + 1, nChPlate = Math.max(1, Math.round(p.chPerCell / (p.plate === 'dedicated' ? 2 * nRib : nRib + 1))), pitch = w / nChPlate;
+    const tPlate = p.plate === 'dedicated' ? web + chH + skin : 2 * web + chH, stackH = nPlates * tPlate + nRib * (t + 2 * tc);
+    const stroke = stroke05 ?? alloy.epsL * p.xiUse * L, strokeProv = stroke05 ? 'coupled' : 'calc';
+    const travel = p.travel_mm / 1e3, clear = p.clear_mm / 1e3, wall = p.wall_mm / 1e3, plateW = w + 2 * p.plateEdge_mm / 1e3, Wc = plateW + 1e-3, Hc = stackH + 1e-3, Wout = Wc + 2 * wall, Hout = Hc + 2 * wall;
+    const g = { L, w, t, tc, nRib, plate: p.plate, tPlate, plateW, stackH, gripL: p.gripL_mm / 1e3, carL: p.carL_mm / 1e3, wall, Wc, Hc, Wout, Hout, plateGap: travel + 0.5e-3, springD: p.springD_mm / 1e3, springWire: p.springWire_mm / 1e3, springCoils: p.springCoils, springFree: p.springFree_mm / 1e3, rodD: p.rodD_mm / 1e3, portD: Math.min(4e-3, 0.5 * Wout), portL: 6e-3, nChPlate,
+      colors: { sma: '#c58b4b', plate: '#b8c0cc', grip: '#8b9bb4', carriage: '#64748b', spring: '#d4d4d8', housing: '#5a7fa8', hot: '#ef4444', cold: '#3b82f6' } };
+    const rotorR = p.rotorR_mm / 1e3, sinA = Math.sin(Math.PI / N);
+    const rTang = (Wout + clear) / (2 * sinA), rRot = rotorR + travel + 3 * clear;
+    const rInner = p.rInner_mm > 0 ? p.rInner_mm / 1e3 : 1.1 * Math.max(rTang, rRot), rInnerProv = p.rInner_mm > 0 ? 'user' : 'generated';
+    // local cartridge → global placement; flange inner face at rInner
+    const proto = buildCartridge({ ...g, rodL: 1e-3 });
+    const rodL = Math.max(1e-3, rInner - rotorR - clear) + (g.springFree + wall); g.rodL = rodL;
+    const cartLen = proto.xEnd - proto.xF0, rOuter = rInner + cartLen, rPort = rInner + (proto.xP - proto.xF0), rM = p.manifoldD_mm / 2e3;
+    const zM = Hout / 2 + g.portL + rM, Rcase = Math.max(rOuter, rPort + rM) + clear + 2e-3, tCase = 4e-3, Lcase = 2 * (zM + rM + clear), shaftL = Lcase + 2 * tCase + 0.06;
+    const parts = [], cart0 = [];
+    for (let k = 0; k < N; k++) {
+      const c = buildCartridge(g, `C${String(k + 1).padStart(2, '0')} `), phi = 2 * Math.PI * k / N;
+      for (const m of c.parts) { m.translate(rInner - c.xF0, 0, 0).rotZ(phi); m.cartridge = k; parts.push(m); if (k === 0) cart0.push(m); }
+    }
+    const rotor = cylinder('Rotor / flywheel disc', rotorR, p.rotorT_mm / 1e3, 72, { color: '#9aa4b2', group: 'Rotor' }); rotor.component = 'rotor'; rotor.count = 1;
+    const shaft = cylinder('Output shaft', p.shaftD_mm / 2e3, shaftL, 36, { color: '#e5e7eb', group: 'Rotor' }); shaft.component = 'shaft'; shaft.count = 1;
+    const mHot = torus('Hot manifold ring', rPort, rM, 72, 16, { color: '#ef4444', group: 'Manifolds' }).translate(0, 0, zM); mHot.component = 'manifold'; mHot.shellT = 1.5e-3;
+    const mCold = torus('Cold manifold ring', rPort, rM, 72, 16, { color: '#3b82f6', group: 'Manifolds' }).translate(0, 0, -zM); mCold.component = 'manifold'; mCold.shellT = 1.5e-3;
+    const casing = tube('Casing shell', Rcase + tCase, Rcase, Lcase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }); casing.component = 'casing';
+    const endA = cylinder('Front end plate', Rcase + tCase, tCase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }).translate(0, 0, Lcase / 2 + tCase / 2); endA.component = 'casing';
+    const endB = cylinder('Rear end plate', Rcase + tCase, tCase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }).translate(0, 0, -Lcase / 2 - tCase / 2); endB.component = 'casing';
+    const engineParts = [rotor, shaft, mHot, mCold, casing, endA, endB];
+    parts.push(...engineParts);
+    return { N, nRib, L, w, t, chW, chH, web, skin, tc, nPlates, nChPlate, pitch, tPlate, stackH, stroke, strokeProv, travel, clear, wall, plateW, Wc, Hc, Wout, Hout, g, rotorR, sinA, rTang, rRot, rInner, rInnerProv, proto, rodL, cartLen, rOuter, rPort, rM, zM, Rcase, tCase, Lcase, shaftL, parts, cart0, rotor, shaft, mHot, mCold, casing, endA, endB, engineParts };
 }
 
 export default {
@@ -200,35 +235,7 @@ export default {
     const mat = (key) => componentMaterial(ctx.store, key);
     const M = { channelPlate: mat('channelPlate'), contactLayer: mat('contactLayer'), grip: mat('grip'), carriage: mat('carriage'), biasSpring: mat('biasSpring'), housing: mat('housing'), rotor: mat('rotor'), shaft: mat('shaft'), manifold: mat('manifold'), casing: mat('casing'), ribbon: alloy };
     // ---------- parametric dimensions (SI) ----------
-    const N = Math.max(3, Math.round(p.nCells)), nRib = Math.max(1, Math.round(p.nRib)), L = p.L_mm / 1e3, w = p.w_mm / 1e3, t = p.t_um / 1e6, chW = p.chW_mm / 1e3, chH = p.chH_mm / 1e3, web = p.web_mm / 1e3, skin = p.skin_mm / 1e3, tc = p.tc_um / 1e6;
-    const nPlates = p.plate === 'dedicated' ? 2 * nRib : nRib + 1, nChPlate = Math.max(1, Math.round(p.chPerCell / (p.plate === 'dedicated' ? 2 * nRib : nRib + 1))), pitch = w / nChPlate;
-    const tPlate = p.plate === 'dedicated' ? web + chH + skin : 2 * web + chH, stackH = nPlates * tPlate + nRib * (t + 2 * tc);
-    const stroke = ctx.upstream('s05')?.stroke_m ?? alloy.epsL * p.xiUse * L, strokeProv = ctx.upstream('s05')?.stroke_m ? 'coupled' : 'calc';
-    const travel = p.travel_mm / 1e3, clear = p.clear_mm / 1e3, wall = p.wall_mm / 1e3, plateW = w + 2 * p.plateEdge_mm / 1e3, Wc = plateW + 1e-3, Hc = stackH + 1e-3, Wout = Wc + 2 * wall, Hout = Hc + 2 * wall;
-    const g = { L, w, t, tc, nRib, plate: p.plate, tPlate, plateW, stackH, gripL: p.gripL_mm / 1e3, carL: p.carL_mm / 1e3, wall, Wc, Hc, Wout, Hout, plateGap: travel + 0.5e-3, springD: p.springD_mm / 1e3, springWire: p.springWire_mm / 1e3, springCoils: p.springCoils, springFree: p.springFree_mm / 1e3, rodD: p.rodD_mm / 1e3, portD: Math.min(4e-3, 0.5 * Wout), portL: 6e-3, nChPlate,
-      colors: { sma: '#c58b4b', plate: '#b8c0cc', grip: '#8b9bb4', carriage: '#64748b', spring: '#d4d4d8', housing: '#5a7fa8', hot: '#ef4444', cold: '#3b82f6' } };
-    const rotorR = p.rotorR_mm / 1e3, sinA = Math.sin(Math.PI / N);
-    const rTang = (Wout + clear) / (2 * sinA), rRot = rotorR + travel + 3 * clear;
-    const rInner = p.rInner_mm > 0 ? p.rInner_mm / 1e3 : 1.1 * Math.max(rTang, rRot), rInnerProv = p.rInner_mm > 0 ? 'user' : 'generated';
-    // local cartridge → global placement; flange inner face at rInner
-    const proto = buildCartridge({ ...g, rodL: 1e-3 });
-    const rodL = Math.max(1e-3, rInner - rotorR - clear) + (g.springFree + wall); g.rodL = rodL;
-    const cartLen = proto.xEnd - proto.xF0, rOuter = rInner + cartLen, rPort = rInner + (proto.xP - proto.xF0), rM = p.manifoldD_mm / 2e3;
-    const zM = Hout / 2 + g.portL + rM, Rcase = Math.max(rOuter, rPort + rM) + clear + 2e-3, tCase = 4e-3, Lcase = 2 * (zM + rM + clear), shaftL = Lcase + 2 * tCase + 0.06;
-    const parts = [], cart0 = [];
-    for (let k = 0; k < N; k++) {
-      const c = buildCartridge(g, `C${String(k + 1).padStart(2, '0')} `), phi = 2 * Math.PI * k / N;
-      for (const m of c.parts) { m.translate(rInner - c.xF0, 0, 0).rotZ(phi); m.cartridge = k; parts.push(m); if (k === 0) cart0.push(m); }
-    }
-    const rotor = cylinder('Rotor / flywheel disc', rotorR, p.rotorT_mm / 1e3, 72, { color: '#9aa4b2', group: 'Rotor' }); rotor.component = 'rotor'; rotor.count = 1;
-    const shaft = cylinder('Output shaft', p.shaftD_mm / 2e3, shaftL, 36, { color: '#e5e7eb', group: 'Rotor' }); shaft.component = 'shaft'; shaft.count = 1;
-    const mHot = torus('Hot manifold ring', rPort, rM, 72, 16, { color: '#ef4444', group: 'Manifolds' }).translate(0, 0, zM); mHot.component = 'manifold'; mHot.shellT = 1.5e-3;
-    const mCold = torus('Cold manifold ring', rPort, rM, 72, 16, { color: '#3b82f6', group: 'Manifolds' }).translate(0, 0, -zM); mCold.component = 'manifold'; mCold.shellT = 1.5e-3;
-    const casing = tube('Casing shell', Rcase + tCase, Rcase, Lcase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }); casing.component = 'casing';
-    const endA = cylinder('Front end plate', Rcase + tCase, tCase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }).translate(0, 0, Lcase / 2 + tCase / 2); endA.component = 'casing';
-    const endB = cylinder('Rear end plate', Rcase + tCase, tCase, 96, { color: '#475569', group: 'Casing', opacity: 0.16 }).translate(0, 0, -Lcase / 2 - tCase / 2); endB.component = 'casing';
-    const engineParts = [rotor, shaft, mHot, mCold, casing, endA, endB];
-    parts.push(...engineParts);
+    const { N, nRib, L, w, t, chW, chH, web, skin, tc, nPlates, nChPlate, pitch, tPlate, stackH, stroke, strokeProv, travel, clear, wall, plateW, Wc, Hc, Wout, Hout, g, rotorR, sinA, rTang, rRot, rInner, rInnerProv, proto, rodL, cartLen, rOuter, rPort, rM, zM, Rcase, tCase, Lcase, shaftL, parts, cart0, rotor, shaft, mHot, mCold, casing, endA, endB, engineParts } = buildEngineGeometry(p, { alloy, stroke05: ctx.upstream('s05')?.stroke_m });
     ctx.progress(0.1, 'mass properties');
     // ---------- mass properties ----------
     const chVoidPerPlate = nChPlate * chW * chH * (L - g.plateGap);
@@ -416,12 +423,15 @@ export default {
     let dwgCache = null; const drawing = () => (dwgCache ||= engineeringDrawing(buildCartridge(g).parts, { title: 'THERMA-X100 thermal-muscle cartridge', dwgNo: p.dwgNo, scale: 'NTS', material: `${alloy.name}; plates ${pm.name}`, dims: [] }));
     out.views.push({ label: 'Drawings', icon: '📐', render: (el) => { const d = drawing(); el.innerHTML = `<div style="background:#fff;border-radius:8px;overflow:auto">${d.svg}</div><div style="margin-top:12px">${sectionSVG(sec, g)}</div>`; } });
     out.views.push({ label: 'Mesh', icon: '🕸', render: (el) => { el.innerHTML = `<p class="small muted">Selected ${mesh.kind} mesh (half unit cell, symmetry at the bottom = ribbon mid-plane; channel walls in blue).</p>${ML.meshSVG(mesh)}<p class="small muted" style="margin-top:10px">${altMesh.kind} mesh at a comparable nominal size.</p>${ML.meshSVG(altMesh)}`; } });
-    out.views.push({ label: 'Heating animation', icon: '🎞', render: (el) => anim2d(el, { duration: heat.t[heat.t.length - 1], label: 'Time', unit: 's', height: 440, explain: 'Temperature field of the unit cell (mirrored about the ribbon mid-plane) after the channels switch to hot fluid, with the region temperatures on the right.', draw(gx, tt, W, H) {
-      const th = theme(), sn = heat.snaps.reduce((a, b) => (Math.abs(b.t - tt) < Math.abs(a.t - tt) ? b : a)), col = (u) => cssColor(cmap(u, 'inferno'));
-      ML.paintField(gx, mesh, sn.T, { x: 10, y: 30, w: W * 0.55, h: H - 70, lo: Tc, hi: Th, color: col, mirror: true });
-      gx.fillStyle = th.fg; gx.fillText(`t = ${fmt(sn.t * 1e3, 4)} ms · ribbon centre (bronze band) between plates · channels blank`, 12, 18);
-      for (let k = 0; k <= 50; k++) { gx.fillStyle = col(k / 50); gx.fillRect(14 + k * 4, H - 30, 4, 10); } gx.fillStyle = th.mute; gx.fillText(`${Tc} °C`, 14, H - 8); gx.fillText(`${Th} °C`, 200, H - 8);
-      seriesPanel(gx, { x: W * 0.58, y: 12, w: W * 0.4, h: H - 30, T: heat.t, t: tt, title: 'Region temperatures', unit: '°C', series: [{ name: 'ribbon mean', y: heat.stats.ribbon.mean, color: '#f59e0b' }, { name: 'plate mean', y: heat.stats.wall.mean, color: '#94a3b8' }, { name: 'ribbon min', y: heat.stats.ribbon.min, color: '#ef4444' }], hlines: [{ y: Th, label: 'hot fluid', color: '#ef4444' }] });
+    out.views.push({ label: 'Heating animation', icon: '🎞', render: (el) => anim2d(el, { duration: heat.t[heat.t.length - 1], label: 'Time', unit: 's', height: (W) => W < 640 ? 760 : 440, explain: 'Temperature field of the unit cell (mirrored about the ribbon mid-plane) after the channels switch to hot fluid, with the region temperatures on the right.', draw(gx, tt, W, H) {
+      const th = theme(), sn = heat.snaps.reduce((a, b) => (Math.abs(b.t - tt) < Math.abs(a.t - tt) ? b : a)), col = (u) => cssColor(cmap(u, 'inferno')), narrow = W < 640, z = fontPx(W);
+      const fw = narrow ? W - 20 : W * 0.55, yT = para(gx, `t = ${fmt(sn.t * 1e3, 4)} ms · ribbon centre (bronze band) between plates · channels blank`, 12, 8 + z, fw, { size: z, maxLines: 2 });
+      const fy = yT + 2, fh = narrow ? 300 : H - fy - 44;
+      ML.paintField(gx, mesh, sn.T, { x: 10, y: fy, w: fw, h: fh, lo: Tc, hi: Th, color: col, mirror: true });
+      const cbW = Math.min(200, fw - 20), cy = fy + fh + 8; for (let k = 0; k <= 50; k++) { gx.fillStyle = col(k / 50); gx.fillRect(14 + k * cbW / 51, cy, cbW / 51 + 0.5, 10); }
+      label(gx, `${Tc} °C`, 14, cy + 13, { baseline: 'top', size: z - 1, color: th.mute }); label(gx, `${Th} °C`, 14 + cbW, cy + 13, { align: 'right', baseline: 'top', size: z - 1, color: th.mute });
+      const px = narrow ? 10 : W * 0.58, py = narrow ? cy + 34 : 12;
+      seriesPanel(gx, { x: px, y: py, w: narrow ? W - 20 : W * 0.4, h: H - py - 12, T: heat.t, t: tt, title: 'Region temperatures', unit: '°C', series: [{ name: 'ribbon mean', y: heat.stats.ribbon.mean, color: '#f59e0b' }, { name: 'plate mean', y: heat.stats.wall.mean, color: '#94a3b8' }, { name: 'ribbon min', y: heat.stats.ribbon.min, color: '#ef4444' }], hlines: [{ y: Th, label: 'hot fluid', color: '#ef4444' }] });
     } }) });
     // ---------- exports ----------
     const T_node = heat.T, sel3 = cart0;

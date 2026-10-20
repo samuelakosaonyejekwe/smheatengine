@@ -236,19 +236,23 @@ export default {
 };
 
 async function animMatrix(el, A) {
-  const [{ anim2d, seriesPanel, arrow, text, at, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
+  const [{ anim2d, seriesPanel, arrow, label, fs, at, theme }, { cmap }] = await Promise.all([import('../core/anim2d.js'), import('../core/chart.js')]);
   const R = A.RP.rec, T = R.t, P = A.RP.period, lo = A.Tc, hi = A.Th, col = (v) => `rgb(${cmap(clamp((v - lo) / (hi - lo), 0, 1), 'inferno').map(Math.round).join(',')})`;
   const prof = (k) => R.field[k];
-  anim2d(el, { duration: P, rate: P / 8, label: 'Time in cycle', unit: 's', height: 420, explain: 'Converged matrix temperature field replayed over one cycle: during the hot blow the thermal front advances from the hot end; during the cold blow it is pushed back. The lower panel shows the outlet stream temperatures on the same time axis.', draw(g, t, W, H) {
-    const th = theme(), k = at(T, t), i = Math.min(T.length - 1, k.i + (k.f > 0.5 ? 1 : 0)), Tm = prof(i), hot = R.blow[i] === 'H';
-    const x0 = 40, y0 = 40, w = W - 80, hh = 70, n = Tm.length;
+  anim2d(el, { duration: P, rate: P / 8, label: 'Time in cycle', unit: 's', height: (W) => W < 640 ? 480 : 440, explain: 'Converged matrix temperature field replayed over one cycle: during the hot blow the thermal front advances from the hot end; during the cold blow it is pushed back. The lower panel shows the outlet stream temperatures on the same time axis.', draw(g, t, W, H) {
+    const th = theme(), k = at(T, t), i = Math.min(T.length - 1, k.i + (k.f > 0.5 ? 1 : 0)), Tm = prof(i), hot = R.blow[i] === 'H', z = fs(W);
+    const x0 = W < 640 ? 14 : 40, y0 = 26, w = W - 2 * x0, hh = W < 640 ? 50 : 66, n = Tm.length;
     for (let j = 0; j < n; j++) { g.fillStyle = col(Tm[j]); g.fillRect(x0 + j * w / n, y0, w / n + 1, hh); }
     g.strokeStyle = th.fg; g.strokeRect(x0, y0, w, hh);
-    text(g, 'hot end', x0, y0 - 8, th.mute); text(g, 'cold end', x0 + w - 50, y0 - 8, th.mute);
-    if (hot) arrow(g, x0 + 10, y0 + hh + 18, w - 20, 0, '#ef4444', 3, 'hot blow →'); else arrow(g, x0 + w - 10, y0 + hh + 18, -(w - 20), 0, '#38bdf8', 3, '← cold blow');
-    const py = y0 + hh + 34, ph = (H - py - 12) / 2;
-    g.strokeStyle = th.grid; g.strokeRect(x0, py, w, ph - 4); g.strokeStyle = '#facc15'; g.lineWidth = 2; g.beginPath(); for (let j = 0; j < n; j++) { const px = x0 + (j + 0.5) * w / n, pyy = py + ph - 8 - (Tm[j] - lo) / (hi - lo) * (ph - 16); j ? g.lineTo(px, pyy) : g.moveTo(px, pyy); } g.stroke(); g.lineWidth = 1;
-    text(g, `matrix profile — ${fmt(Tm[0], 4)} °C (hot end) … ${fmt(Tm[n - 1], 4)} °C (cold end)`, x0 + 6, py + 14, th.fg);
+    label(g, 'hot end', x0, y0 - 6, { size: z - 1, color: th.mute }); label(g, 'cold end', x0 + w, y0 - 6, { align: 'right', size: z - 1, color: th.mute });
+    const ay = y0 + hh + 12;
+    if (hot) arrow(g, x0 + 10, ay, w - 20, 0, '#ef4444', 3); else arrow(g, x0 + w - 10, ay, -(w - 20), 0, '#38bdf8', 3);
+    label(g, hot ? 'hot blow →' : '← cold blow', x0 + w / 2, ay + 6, { align: 'center', baseline: 'top', size: z, weight: '600', color: hot ? '#ef4444' : '#38bdf8', bg: true, pad: 2 });
+    const py = ay + 26, ph = (H - py - 12) / 2;
+    g.strokeStyle = th.grid; g.fillStyle = th.bg2; g.fillRect(x0, py, w, ph - 4); g.strokeRect(x0, py, w, ph - 4);
+    const yTxt = label(g, `matrix profile — ${fmt(Tm[0], 4)} °C (hot end) … ${fmt(Tm[n - 1], 4)} °C (cold end)`, x0 + 6, py + 4, { baseline: 'top', size: z, weight: '600', maxW: w - 12 }), pT = yTxt.y + yTxt.h + 6, pB = py + ph - 10;
+    g.strokeStyle = th.grid; g.beginPath(); g.moveTo(x0, pT - 3); g.lineTo(x0 + w, pT - 3); g.stroke();
+    g.strokeStyle = '#facc15'; g.lineWidth = 2; g.beginPath(); for (let j = 0; j < n; j++) { const px = x0 + (j + 0.5) * w / n, pyy = pB - (Tm[j] - lo) / (hi - lo) * (pB - pT); j ? g.lineTo(px, pyy) : g.moveTo(px, pyy); } g.stroke(); g.lineWidth = 1;
     seriesPanel(g, { x: x0, y: py + ph, w, h: ph, T, t, title: 'Outlet temperature', unit: '°C', series: [{ name: 'outlet', y: R.Tout, color: '#22c55e' }], hlines: [{ y: A.Th, label: 'T_h', color: '#ef4444' }, { y: A.Tc, label: 'T_c', color: '#3b82f6' }] });
   } });
 }

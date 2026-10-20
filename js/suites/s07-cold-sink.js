@@ -295,15 +295,15 @@ function diurnal(Tmax, Tmin, RH, n) {
 }
 
 async function animReset(el, A) {
-  const [{ anim2d, seriesPanel, gauge, text, at, lerp, theme }] = await Promise.all([import('../core/anim2d.js')]);
+  const [{ anim2d, seriesPanel, gauge, label, fs, at, lerp, theme }] = await Promise.all([import('../core/anim2d.js')]);
   const Hc = A.H, P = Hc.t[Hc.t.length - 1] || 1;
-  anim2d(el, { duration: P, rate: P / 6, label: 'Time in cycle', unit: 's', height: 420, explain: 'Solved transient cell at the achieved coolant temperature: the fluid switches between hot and cold; the ribbon temperature lags and the martensite fraction ξ must return to 1 during the cold phase (reset). Red dashed: Af(σH); blue dashed: Mf(σL).', draw(g, t, W, H) {
-    const th = theme(), k = at(Hc.t, t), Tm = lerp(Hc.Tm, k), xi = lerp(Hc.xi, k), Tf = lerp(Hc.Tf, k);
-    const cold = Tf < (A.MfL + A.AfH) / 2; g.fillStyle = cold ? '#1d4ed8' : '#b91c1c'; g.fillRect(16, 16, 150, 26); text(g, cold ? 'COLD phase (reset)' : 'HOT phase (stroke)', 24, 34, '#fff');
-    const rx = 190, rw = W - rx - 120, ry = 20, rh = 24; g.fillStyle = th.bg2; g.fillRect(rx, ry, rw, rh); g.fillStyle = `rgba(59,130,246,${0.25 + 0.7 * xi})`; g.fillRect(rx, ry, rw * (0.96 + 0.04 * xi), rh); text(g, `ribbon: ξ = ${fmt(xi, 3)} martensite, ${fmt(Tm, 4)} °C`, rx + 6, ry + 16, th.fg);
-    gauge(g, { cx: W - 60, cy: 64, r: 34, value: Tm, min: Math.min(...Hc.Tm) - 1, max: Math.max(...Hc.Tm) + 1, label: 'ribbon T', unit: '°C', cmapName: 'inferno' });
-    const ph = (H - 120) / 2;
-    seriesPanel(g, { x: 10, y: 110, w: W - 20, h: ph, T: Hc.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'fluid', y: Hc.Tf, color: '#94a3b8' }, { name: 'surface', y: Hc.Ts, color: '#f97316' }, { name: 'mean', y: Hc.Tm, color: '#facc15' }], hlines: [{ y: A.MfL, label: 'Mf(σL)', color: '#3b82f6' }, { y: A.AfH, label: 'Af(σH)', color: '#ef4444' }] });
-    seriesPanel(g, { x: 10, y: 118 + ph, w: W - 20, h: ph - 8, T: Hc.t, t, title: 'Martensite fraction', unit: '', ymin: 0, ymax: 1, series: [{ name: 'ξ', y: Hc.xi, color: '#38bdf8' }] });
+  anim2d(el, { duration: P, rate: P / 6, label: 'Time in cycle', unit: 's', height: (W) => W < 640 ? 520 : 440, explain: 'Solved transient cell at the achieved coolant temperature: the fluid switches between hot and cold; the ribbon temperature lags and the martensite fraction ξ must return to 1 during the cold phase (reset). Red dashed: Af(σH); blue dashed: Mf(σL).', draw(g, t, W, H) {
+    const th = theme(), k = at(Hc.t, t), Tm = lerp(Hc.Tm, k), xi = lerp(Hc.xi, k), Tf = lerp(Hc.Tf, k), z = fs(W), gr = 32, rEdge = W - 2 * gr - 34;
+    const cold = Tf < (A.MfL + A.AfH) / 2, bw = Math.min(180, rEdge - 16); g.fillStyle = cold ? '#1d4ed8' : '#b91c1c'; g.fillRect(16, 12, bw, 26); label(g, cold ? 'COLD phase (reset)' : 'HOT phase (stroke)', 16 + bw / 2, 25, { align: 'center', baseline: 'middle', maxW: bw - 12, size: z, weight: '600', color: '#fff' });
+    const rx = 16, rw = rEdge - 16, ry = 48, rh = 24; g.fillStyle = th.bg2; g.fillRect(rx, ry, rw, rh); g.fillStyle = `rgba(59,130,246,${0.25 + 0.7 * xi})`; g.fillRect(rx, ry, rw * (0.96 + 0.04 * xi), rh); label(g, `ribbon: ξ = ${fmt(xi, 3)} martensite, ${fmt(Tm, 4)} °C`, rx + 6, ry + rh / 2, { baseline: 'middle', maxW: rw - 12, size: z, color: th.fg });
+    gauge(g, { cx: W - gr - 18, cy: 56, r: gr, value: Tm, min: Math.min(...Hc.Tm) - 1, max: Math.max(...Hc.Tm) + 1, label: 'ribbon T', unit: '°C', cmapName: 'inferno' });
+    const ph = (H - 108) / 2;
+    seriesPanel(g, { x: 10, y: 92, w: W - 20, h: ph, T: Hc.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'fluid', y: Hc.Tf, color: '#94a3b8' }, { name: 'surface', y: Hc.Ts, color: '#f97316' }, { name: 'mean', y: Hc.Tm, color: '#facc15' }], hlines: [{ y: A.MfL, label: 'Mf(σL)', color: '#3b82f6' }, { y: A.AfH, label: 'Af(σH)', color: '#ef4444' }] });
+    seriesPanel(g, { x: 10, y: 100 + ph, w: W - 20, h: ph, T: Hc.t, t, title: 'Martensite fraction', unit: '', ymin: 0, ymax: 1, series: [{ name: 'ξ', y: Hc.xi, color: '#38bdf8' }] });
   } });
 }

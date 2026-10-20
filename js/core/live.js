@@ -107,7 +107,7 @@ export async function worldBank(iso2, indicator, n = 12) {
   const rows = (r.data?.[1] || []).filter(d => d.value !== null).map(d => ({ year: +d.date, value: d.value, country: d.country?.value }));
   r.series = rows.sort((a, b) => a.year - b.year); r.latest = rows.length ? rows[rows.length - 1] : null; return r;
 }
-export const WB = { inflation: 'FP.CPI.TOTL.ZG', lendingRate: 'FR.INR.LEND', realRate: 'FR.INR.RINR', gdpPc: 'NY.GDP.PCAP.CD', manufacturing: 'NV.IND.MANF.ZS', co2pc: 'EN.GHG.CO2.PC.CE.AR5', renewShare: 'EG.FEC.RNEW.ZS', elecAccess: 'EG.ELC.ACCS.ZS' };
+export const WB = { inflation: 'FP.CPI.TOTL.ZG', lendingRate: 'FR.INR.LEND', realRate: 'FR.INR.RINR', gdpPc: 'NY.GDP.PCAP.CD', manufacturing: 'NV.IND.MANF.ZS', co2pc: 'EN.GHG.CO2.PC.CE.AR5', renewShare: 'EG.ELC.RNEW.ZS', elecAccess: 'EG.ELC.ACCS.ZS' };
 export async function fxRates(base = 'USD') { return fetchJSON('frankfurter', `https://api.frankfurter.dev/v1/latest?base=${base}`); }
 export async function gridCarbon(iso3) {
   const r = await fetchJSON('owid-carbon', 'https://ourworldindata.org/grapher/electricity-mix.csv?frequency=annual&metric=carbon_intensity&source=total&v=1&csvType=filtered&useColumnShortNames=true', { text: true });

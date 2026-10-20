@@ -8,7 +8,7 @@
 // and thermal parameters uses the physics model itself at the selected design.
 import { fmt, linspace, range, clamp, mean, std, min, max, lhs, rng, scaleSample, histogram, metrics, percentile, normCdf, nelderMead } from '../core/num.js';
 import { sobol, tornado, nsga2, gpFit, hypervolume2, propagate } from '../core/analysis.js';
-import { anim2d, seriesPanel, text } from '../core/anim2d.js';
+import { anim2d, seriesPanel, para, wrapLines, fs as fontPx } from '../core/anim2d.js';
 
 const LOG10 = Math.log10;
 const pause = async (ctx) => { try { if (typeof requestAnimationFrame === 'function') await ctx.yield(); else await new Promise(r => setTimeout(r, 0)); } catch { /* advisory */ } };
@@ -311,12 +311,14 @@ export default {
     if (bA) out.recs.push({ level: 'sustain', text: `The selected design draws ${fmt(bA.QhotTot / Math.max(1e-9, bA.Pnet), 4)} W of heat per net watt; using waste heat (Suite 06) rather than purpose-generated heat is essential for a favourable footprint, and higher regenerator effectiveness (${fmt(bestC.d.regenEff, 3)} now) reduces it directly.`, basis: 'Selected design heat demand' });
     out.recs.push({ level: 'info', text: 'Validate blind: build the selected design and one Pareto neighbour, record the prediction before testing, and import the measured net power here and in Suite 19.', basis: 'Master spec Module 17 — blind validation' });
     // ---- view: best design cell history
-    if (bestC?.E?.cell?.hist) { const Hh = bestC.E.cell.hist, Hb = Ebase.cell.hist; out.views.push({ label: '2D animation: selected vs baseline cell cycle', icon: '🎞', render: (el) => anim2d(el, { duration: 1, label: 'cycle fraction', unit: '', height: 380, explain: 'Selected design (left/top panels) and baseline design on a normalised cycle time: ribbon temperature, martensite fraction and mechanical power to the load.', draw(g, t, W, H) {
-      const nT = (T) => T.map(v => v / T[T.length - 1]); const tA = nT(Hh.t), tB = nT(Hb.t), ph = (H - 20) / 3;
-      seriesPanel(g, { x: 8, y: 6, w: W - 16, h: ph - 6, T: tA, t, title: 'Ribbon mean temperature — selected / baseline', unit: '°C', series: [{ name: 'selected', y: Hh.Tm, color: '#22c55e' }] });
-      seriesPanel(g, { x: 8, y: 6 + ph, w: W - 16, h: ph - 6, T: tB, t, title: 'Baseline ribbon temperature', unit: '°C', series: [{ name: 'baseline', y: Hb.Tm, color: '#94a3b8' }] });
+    if (bestC?.E?.cell?.hist) { const Hh = bestC.E.cell.hist, Hb = Ebase.cell.hist; out.views.push({ label: '2D animation: selected vs baseline cell cycle', icon: '🎞', render: (el) => anim2d(el, { duration: 1, label: 'cycle fraction', unit: '', height: (W) => W < 640 ? 560 : 440, explain: 'Selected design (left/top panels) and baseline design on a normalised cycle time: ribbon temperature, martensite fraction and mechanical power to the load.', draw(g, t, W, H) {
+      const z = fontPx(W), cap = `selected ${fmt(bestC.d.freq, 3)} Hz, t = ${fmt(bestC.d.ribbonT * 1e6, 3)} µm  ·  baseline ${fmt(base.freq, 3)} Hz, t = ${fmt(base.ribbonT * 1e6, 3)} µm`;
+      const capH = wrapLines(g, cap, W - 24, { size: z, maxLines: 2 }).length * z * 1.3 + 8;
+      const nT = (T) => T.map(v => v / T[T.length - 1]); const tA = nT(Hh.t), tB = nT(Hb.t), ph = (H - capH - 8) / 3;
+      seriesPanel(g, { x: 8, y: 6, w: W - 16, h: ph - 6, T: tA, t, title: 'Selected design: ribbon mean temperature', unit: '°C', series: [{ name: 'selected', y: Hh.Tm, color: '#22c55e' }] });
+      seriesPanel(g, { x: 8, y: 6 + ph, w: W - 16, h: ph - 6, T: tB, t, title: 'Baseline: ribbon mean temperature', unit: '°C', series: [{ name: 'baseline', y: Hb.Tm, color: '#94a3b8' }] });
       seriesPanel(g, { x: 8, y: 6 + 2 * ph, w: W - 16, h: ph - 6, T: tA, t, title: 'Selected design: ξ and power to load', unit: '', series: [{ name: 'ξ', y: Hh.xi, color: '#38bdf8' }, { name: 'P_mech / max', y: Hh.Pmech.map(v => v / (max(Hh.Pmech) || 1)), color: '#f97316' }] });
-      text(g, `selected ${fmt(bestC.d.freq, 3)} Hz, t = ${fmt(bestC.d.ribbonT * 1e6, 3)} µm  ·  baseline ${fmt(base.freq, 3)} Hz, t = ${fmt(base.ribbonT * 1e6, 3)} µm`, 14, H - 4);
+      para(g, cap, 12, 6 + 3 * ph + z, W - 24, { size: z, maxLines: 2 });
     } }) }); }
     const paretoOut = frontA.map(q => ({ front: 'power-efficiency', ...Object.fromEntries(DV.map((v, i) => [v[0], v[0] === 'nCells' ? Math.round(q.x[i]) : q.x[i]])), sigmaH: q.s.d.sigmaH, Pnet: q.s.Pnet, carnotFraction: q.s.cf, pActive: q.s.pActive, life: q.s.life, cost: q.s.cost }))
       .concat(frontB.map(q => ({ front: 'specific power-life', ...Object.fromEntries(DV.map((v, i) => [v[0], v[0] === 'nCells' ? Math.round(q.x[i]) : q.x[i]])), sigmaH: q.s.d.sigmaH, Pnet: q.s.Pnet, carnotFraction: q.s.cf, pActive: q.s.pActive, life: q.s.life, cost: q.s.cost })));

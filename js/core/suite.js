@@ -2,7 +2,7 @@
 // verification, theory/IBC/CVV/format documentation, experiment import & calibration, exports.
 import { h, $, tabs, kpiGrid, verdicts, table, recList, paramControl, section, callout, errorBox, toast, progressBar, nextFrame, provChip, modal } from './ui.js';
 import { chart, download } from './chart.js';
-import { store, hashObj, DEPENDS, CREDIBILITY } from './state.js';
+import { store, summarize, hashObj, DEPENDS, CREDIBILITY } from './state.js';
 import * as num from './num.js';
 import * as physics from './physics.js';
 import * as sma from './sma.js';
@@ -15,6 +15,7 @@ import { parseFile, ACCEPT, autoMap } from './io.js';
 import { zip } from './io.js';
 import { contextRecs, verdictRecs, bestPractice, cachedSiteContext, getSiteContext, designRecs } from './advisor.js';
 import { SUITES, suiteIndex } from '../suites/index.js';
+import { VIEWS3D } from './views3d.js';
 
 const MODES = [
   { id: 'auto', label: 'Automatic', tip: 'Generate a reference study from library values, coupled upstream results and explicit engineering assumptions.' },
@@ -137,7 +138,7 @@ export async function renderSuite(root, id) {
     const t0 = performance.now();
     try {
       const res = await def.run(p, ctx); res.elapsed = performance.now() - t0; lastRes = res;
-      store.publish(id, res.outputs || {}, { credibility: res.credibility || def.credibility || 'Analytical screening', hash: hashObj(p) });
+      store.publish(id, res.outputs || {}, { credibility: res.credibility || def.credibility || 'Analytical screening', hash: hashObj(p), summary: summarize(res) });
       header.querySelector('.suite-badges').innerHTML = ''; header.querySelector('.suite-badges').append(h('span', { class: 'badge ok' }, 'Current'), h('span', { class: 'badge cred' }, res.credibility || 'Analytical screening'));
       out.innerHTML = ''; renderResults(out, def, res, p, ctx);
       prog.set(1, 'done');
@@ -161,6 +162,7 @@ function renderResults(out, def, res, p, ctx) {
   const T = [];
   if (res.charts?.length) T.push({ label: 'Plots & contours', icon: '📈', render: (el) => { const g = h('div', { class: 'chart-grid' }); el.append(g); for (const c of res.charts) { const box = h('div', { class: 'chart-cell' + (c.wide ? ' wide' : '') }); g.append(box); chart(box, c); } } });
   for (const v of res.views || []) T.push({ label: v.label, icon: v.icon || '🧊', render: (el) => { const box = h('div', { class: 'view-box' }); el.append(box); Promise.resolve(v.render(box, ctx)).catch(e => box.append(errorBox(e))); } });
+  for (const v of VIEWS3D[def.id] || []) T.push({ label: v.label, icon: v.icon || '🧊', render: (el) => { const box = h('div', { class: 'view-box' }); el.append(box); Promise.resolve(v.render(box, ctx, res, p)).catch(e => box.append(errorBox(e))); } });
   if (res.tables?.length) T.push({ label: 'Tables', icon: '▦', render: (el) => { for (const t of res.tables) el.append(section(t.title, t.explain ? h('p', { class: 'muted small' }, t.explain) : null, table(t.cols, t.rows), h('button', { class: 'btn sm', onclick: () => download(new Blob([[t.cols.join(','), ...t.rows.map(r => r.map(c => typeof c === 'object' ? '' : c).join(','))].join('\n')], { type: 'text/csv' }), (t.title || 'table').replace(/\W+/g, '-') + '.csv') }, 'Download CSV'))); } });
   T.push({ label: 'Explanation', icon: '💬', render: (el) => el.append(explanation(def, res)) });
   T.push({ label: 'Recommendations', icon: '🧭', render: (el) => recsPane(el, def, res) });

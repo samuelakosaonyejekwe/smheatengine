@@ -16,7 +16,7 @@ $('#themeBtn').onclick = () => { const cur = document.documentElement.dataset.th
 // ---------- sidebar ----------
 function drawSidebar() {
   const sb = $('#sidebar'); sb.innerHTML = '';
-  sb.append(h('a', { href: '#/' }, h('span', { class: 'n' }, '⌂'), 'Engineering console'), h('a', { href: '#/feasibility' }, h('span', { class: 'n' }, '✓'), 'Feasibility gate & full chain'), h('a', { href: '#/register' }, h('span', { class: 'n' }, '⛁'), 'EIGDAS input register'), h('a', { href: '#/lab' }, h('span', { class: 'n' }, '⚗'), 'Experimental laboratory'));
+  sb.append(h('a', { href: '#/' }, h('span', { class: 'n' }, '⌂'), 'Engineering console'), h('a', { href: '#/feasibility' }, h('span', { class: 'n' }, '✓'), 'Feasibility gate & full chain'), h('a', { href: '#/register' }, h('span', { class: 'n' }, '⛁'), 'EIGDAS input register'), h('a', { href: '#/lab' }, h('span', { class: 'n' }, '⚗'), 'Experimental laboratory'), h('a', { href: '#/dossier' }, h('span', { class: 'n' }, '📘'), 'Engineering dossier'));
   for (const g of GROUPS) {
     sb.append(h('div', { class: 'grp' }, g));
     for (const s of SUITES.filter(x => x.group === g)) { const o = store.outputMeta(s.id); sb.append(h('a', { href: `#/suite/${s.id}`, 'data-id': s.id }, h('span', { class: 'n' }, String(s.num).padStart(2, '0')), h('span', {}, s.icon + ' ' + s.short), h('span', { class: 'st ' + (o ? (o.stale ? 'stale' : 'ok') : ''), title: o ? (o.stale ? 'stale' : 'current') : 'not run' }))); }
@@ -26,8 +26,27 @@ drawSidebar();
 let sbTimer; store.subscribe((e) => { if (e.type === 'storage') toast(e.msg, e.level, 12000); if (['output', 'reset', 'engine', 'material', 'site'].includes(e.type)) { clearTimeout(sbTimer); sbTimer = setTimeout(drawSidebar, 200); } if (e.type === 'site' || e.type === 'reset') siteLabel(); });
 $('#menuBtn').onclick = () => { $('#sidebar').classList.toggle('open'); $('#topnav').classList.toggle('open'); };
 
+// ---------- automatic dossier revisions ----------
+// Every change of inputs (design, materials, suite inputs, locks, site, supplied datasets, laboratory records) yields a new
+// dossier revision record; an open dossier page regenerates itself. Dataset arrivals are announced with a link.
+let dzTimer = null, dzLastType = '';
+store.subscribe((e) => {
+  if (['dossier', 'output', 'revision', 'storage'].includes(e.type)) return;
+  dzLastType = e.type === 'param' ? `input ${e.id}.${e.key}` : e.type === 'engine' ? 'engine design' : e.type === 'material' ? `material ${e.component}` : e.type === 'site' ? 'site' : e.type || 'change';
+  clearTimeout(dzTimer); dzTimer = setTimeout(async () => {
+    try {
+      const { inputsSignature } = await import('./core/dossier.js'); const sig = inputsSignature(), log = (store.project.dossierLog ||= []), last = log[log.length - 1];
+      if (last && last.hash === sig.hash) return;
+      const newData = last && sig.datasets > last.datasets;
+      log.push({ rev: `D${log.length + 1}`, t: Date.now(), trigger: newData ? 'new input data supplied' : dzLastType, hash: sig.hash, datasets: sig.datasets }); if (log.length > 300) log.splice(0, log.length - 300);
+      store.touch({ type: 'dossier', trigger: newData ? 'new input data' : dzLastType });
+      if (newData) { const t = toast('Dossier updated with the new input data — ', 'ok', 8000); t?.append?.(h('a', { href: '#/dossier/data' }, 'open dossier')); }
+    } catch (err) { console.warn('dossier revision', err); }
+  }, 1500);
+});
+
 // ---------- router ----------
-const PAGES = { '': 'home', feasibility: 'feasibility', scenarios: 'scenarios', portal: 'portal', datahub: 'datahub', register: 'register', library: 'library', lab: 'lab', project: 'project', help: 'help', install: 'install' };
+const PAGES = { '': 'home', feasibility: 'feasibility', scenarios: 'scenarios', portal: 'portal', datahub: 'datahub', register: 'register', library: 'library', lab: 'lab', dossier: 'dossier', project: 'project', help: 'help', install: 'install' };
 let current = null;
 async function route() {
   const hash = location.hash.replace(/^#\/?/, ''), [page, arg] = hash.split('/');
@@ -83,17 +102,29 @@ if (!standalone) $('#installBtn').hidden = false;
 $('#installBtn').onclick = async () => { if (deferred) { deferred.prompt(); const r = await deferred.userChoice; deferred = null; if (r.outcome === 'accepted') $('#installBtn').hidden = true; } else location.hash = '#/install'; };
 export const installPrompt = () => deferred;
 
-// ---------- service worker (offline, background refresh) ----------
+// ---------- service worker (offline, background refresh) and update notification ----------
+// An update is detected (a) by the service worker finding a new precache version, checked on launch, on return to the
+// foreground, when connectivity returns and every 15 minutes; or (b) where service workers are unavailable, by polling
+// files.json for a new release fingerprint. Either way the update pop-up appears; "Later" snoozes it for 30 minutes.
+let pendingApply = null, snoozeUntil = 0, loadedFingerprint = null;
+function offerUpdate(apply) { pendingApply = apply; if (Date.now() < snoozeUntil) return; showUpdatePopup(apply); }
+setInterval(() => { if (pendingApply && Date.now() >= snoozeUntil && !document.querySelector('.update-pop')) showUpdatePopup(pendingApply); }, 60e3);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').then(async (reg) => {
     if (!reg) return;
-    const offer = (w) => showUpdatePopup(() => w.postMessage('skipWaiting'));
+    const offer = (w) => offerUpdate(() => w.postMessage('skipWaiting'));
     if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
     reg.addEventListener('updatefound', () => { const w = reg.installing; w?.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); }); });
     try { if ('periodicSync' in reg) { const st = await navigator.permissions.query({ name: 'periodic-background-sync' }); if (st.state === 'granted') await reg.periodicSync.register('tx-refresh', { minInterval: 6 * 3600e3 }); } } catch { /* optional capability */ }
-    setInterval(() => reg.update().catch(() => { }), 3600e3);
+    const check = () => { if (navigator.onLine) reg.update().catch(() => { }); };
+    check(); setInterval(check, 15 * 60e3);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    window.addEventListener('online', check);
   }).catch(e => console.warn('SW registration failed', e));
   let reloaded = false; navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+} else if (location.protocol !== 'file:') {
+  const poll = async () => { try { const r = await fetch('files.json', { cache: 'no-store' }); if (!r.ok) return; const { version } = await r.json(); if (!loadedFingerprint) loadedFingerprint = version; else if (version !== loadedFingerprint) offerUpdate(() => location.reload()); } catch { /* offline */ } };
+  poll(); setInterval(poll, 15 * 60e3); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(); });
 }
 // persistent storage so cached datasets survive storage pressure
 navigator.storage?.persist?.().catch(() => { });
@@ -103,13 +134,17 @@ async function showUpdatePopup(apply) {
   if (document.querySelector('.update-pop')) return;
   const { CHANGELOG } = await import('./changelog.js').catch(() => ({ CHANGELOG: [] }));
   const latest = CHANGELOG[0];
-  const close = () => wrap.remove();
-  const wrap = h('div', { class: 'modal-wrap update-wrap' }, h('div', { class: 'update-pop', role: 'dialog', 'aria-label': 'Update available' },
-    h('div', { class: 'up-head' }, h('div', { class: 'up-icon' }, '⬆'), h('div', {}, h('div', { class: 'up-kicker' }, 'Update available'), h('h3', {}, 'A new version of THERMA-X100 is ready'))),
-    h('div', { class: 'up-body' }, h('p', { class: 'muted' }, 'Your projects, results and imported data are kept. The update installs in about a second and works offline afterwards.'),
-      latest ? h('div', {}, h('div', { class: 'up-sub' }, 'Highlights'), h('ul', { class: 'up-list' }, ...latest.items.slice(0, 4).map(i => h('li', {}, i)))) : null),
-    h('div', { class: 'up-foot' }, h('button', { class: 'btn', onclick: close }, 'Later'), h('button', { class: 'btn primary', onclick: () => { close(); apply(); } }, 'Update now'))));
-  document.body.append(wrap);
+  const close = () => { wrap.classList.add('closing'); setTimeout(() => wrap.remove(), 220); };
+  const later = () => { snoozeUntil = Date.now() + 30 * 60e3; close(); toast('Update postponed — it will be offered again in 30 minutes. Your work is unaffected.', 'info', 5000); };
+  const now = h('button', { class: 'btn primary', onclick: () => { now.disabled = true; now.textContent = 'Updating…'; pendingApply = null; apply(); setTimeout(() => location.reload(), 2500); } }, '⬆ Update now');
+  const wrap = h('div', { class: 'modal-wrap update-wrap', onclick: (e) => { if (e.target === wrap) later(); } }, h('div', { class: 'update-pop', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'up-title' },
+    h('div', { class: 'up-head' }, h('div', { class: 'up-icon' }, '⬆'), h('div', {}, h('div', { class: 'up-kicker' }, `Update ready${latest ? ' · ' + latest.title.split('—')[0].trim() : ''}`), h('h3', { id: 'up-title' }, 'A new version of THERMA-X100 is ready to install'))),
+    h('div', { class: 'up-body' }, h('p', { class: 'muted' }, 'Your projects, results, imported data, laboratory records and dossier history are kept. The update installs in about a second and works offline afterwards.'),
+      latest ? h('div', {}, h('div', { class: 'up-sub' }, 'What’s new'), h('ul', { class: 'up-list' }, ...latest.items.slice(0, 5).map(i => h('li', {}, i)))) : null,
+      h('div', { class: 'small muted' }, `Current version v${VERSION}`)),
+    h('div', { class: 'up-foot' }, h('button', { class: 'btn', onclick: later }, 'Later'), now)));
+  document.body.append(wrap); setTimeout(() => now.focus(), 50);
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') later(); });
 }
 async function showWhatsNew() {
   try {

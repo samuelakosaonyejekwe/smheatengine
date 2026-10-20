@@ -8,7 +8,7 @@
 // Relaxation: Aitken dynamic (vector form) or constant under-relaxation. Convergence is declared on the interface energy,
 // force and displacement residuals together (master spec §26), not on the subsystem states alone.
 import { fmt, linspace, range, clamp, gci, mean, max, min } from '../core/num.js';
-import { anim2d, seriesPanel, text, theme, at, lerp } from '../core/anim2d.js';
+import { anim2d, seriesPanel, theme, at, lerp, label, para, fs as fontPx } from '../core/anim2d.js';
 
 const TWO_PI = 2 * Math.PI;
 // cooperative yield to the UI; falls back to a macrotask where no animation frame exists (headless runs)
@@ -74,8 +74,8 @@ export default {
     { key: 'dutyHot', label: 'Hot-phase fraction', type: 'number', min: 0.1, max: 0.9, step: 0.01, default: 0.5, group: 'Operating point', auto: (c) => { const o = c.upstream('s12'); return o?.dutyHot ? { value: o.dutyHot, prov: 'coupled' } : { value: c.engine.dutyHot, prov: 'calc' }; } },
     { key: 'sigmaL', label: 'Bias (reset) stress σ_L', unit: 'MPa', type: 'number', min: 0, max: 400, step: 1, default: 70, group: 'Operating point', auto: (c) => ({ value: c.engine.sigmaL, prov: 'calc' }) },
     { key: 'sigmaH', label: 'Design power-stroke stress σ_H', unit: 'MPa', type: 'number', min: 1, max: 600, step: 1, default: 110, group: 'Operating point', auto: (c) => ({ value: c.engine.sigmaH, prov: 'calc' }) },
-    { key: 'hHot0', label: 'Initial hot-side HTC', unit: 'W/m²K', type: 'number', min: 50, max: 1e5, step: 50, default: 4000, group: 'Operating point', auto: (c) => { const o = c.upstream('s08'); return o?.hHot_Wm2K ? { value: Math.round(o.hHot_Wm2K), prov: 'coupled' } : { value: c.engine.hHot, prov: 'calc' }; } },
-    { key: 'hCold0', label: 'Initial cold-side HTC', unit: 'W/m²K', type: 'number', min: 50, max: 1e5, step: 50, default: 4000, group: 'Operating point', auto: (c) => { const o = c.upstream('s08'); return o?.hCold_Wm2K ? { value: Math.round(o.hCold_Wm2K), prov: 'coupled' } : { value: c.engine.hCold, prov: 'calc' }; } },
+    { key: 'hHot0', label: 'Initial hot-side HTC', unit: 'W/m²K', type: 'number', min: 50, max: 1e5, step: 50, default: 4000, group: 'Operating point', help: 'Starting guess only; the coupling iterates this from its own fluid solve. Suite 08 reports a face-referred film coefficient on a different area basis, so it is not used as the start value.', auto: (c) => ({ value: c.engine.hHot, prov: 'calc' }) },
+    { key: 'hCold0', label: 'Initial cold-side HTC', unit: 'W/m²K', type: 'number', min: 50, max: 1e5, step: 50, default: 4000, group: 'Operating point', help: 'Starting guess only; the coupling iterates this from its own fluid solve. Suite 08 reports a face-referred film coefficient on a different area basis, so it is not used as the start value.', auto: (c) => ({ value: c.engine.hCold, prov: 'calc' }) },
     { key: 'nC', label: 'Coupling resolution: half-thickness cells', type: 'number', min: 1, max: 8, step: 1, default: 2, group: 'Numerics', expert: true },
     { key: 'spcC', label: 'Coupling resolution: steps per cycle', type: 'number', min: 40, max: 800, step: 10, default: 120, group: 'Numerics', expert: true },
     { key: 'cycC', label: 'Coupling resolution: cycles (mean of cycles after the first)', type: 'number', min: 2, max: 10, step: 1, default: 4, group: 'Numerics', expert: true },
@@ -360,19 +360,20 @@ export default {
 function cosimView(el, { H, f, d, mat, sL }) {
   const P = 1 / f, Tmin = Math.min(...H.Tf), Tmax = Math.max(...H.Tf);
   const col = (T) => { const u = clamp((T - Tmin) / ((Tmax - Tmin) || 1), 0, 1); return `rgb(${Math.round(40 + 215 * u)},${Math.round(90 + 40 * (1 - Math.abs(u - 0.5) * 2))},${Math.round(230 - 200 * u)})`; };
-  anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 / P), label: 'cycle time', unit: 's', height: 460, explain: 'Left: the cell — channel fluid colour shows hot/cold switching, the ribbon colour its mean temperature and its length the strain; the arrow is the clutch force when engaged. Right: fluid/wall/ribbon temperatures, phase fraction and stress, and interface heat flow on the same time base.', draw(g, t, W, H2) {
-    const th = theme(), k = at(H.t, t), Tf = lerp(H.Tf, k), Tm = lerp(H.Tm, k), eps = lerp(H.eps, k), xi = lerp(H.xi, k), s = lerp(H.sExt, k), eng = H.engaged[k.i];
-    const x0 = 20, y0 = 40, w = Math.min(220, W * 0.3), hh = H2 - 80;
+  anim2d(el, { duration: H.t[H.t.length - 1], rate: Math.min(1, 0.5 / P), label: 'cycle time', unit: 's', height: (W) => W < 640 ? 820 : 470, explain: 'Left: the cell — channel fluid colour shows hot/cold switching, the ribbon colour its mean temperature and its length the strain; the arrow is the clutch force when engaged. Right: fluid/wall/ribbon temperatures, phase fraction and stress, and interface heat flow on the same time base.', draw(g, t, W, H2) {
+    const th = theme(), k = at(H.t, t), Tf = lerp(H.Tf, k), Tm = lerp(H.Tm, k), eps = lerp(H.eps, k), xi = lerp(H.xi, k), s = lerp(H.sExt, k), eng = H.engaged[k.i], narrow = W < 640, z = fontPx(W);
+    const x0 = narrow ? 12 : 20, w = narrow ? Math.min(150, W * 0.38) : Math.min(220, W * 0.3), y0 = narrow ? 10 : 46, hh = narrow ? 250 : H2 - 80;
     g.fillStyle = col(Tf); g.globalAlpha = 0.35; g.fillRect(x0, y0, w, hh); g.globalAlpha = 1; g.strokeStyle = th.grid; g.strokeRect(x0, y0, w, hh);
     const epsMax = Math.max(...H.eps), Lfull = hh - 60, Lr = Lfull * (1 - (epsMax - eps) / Math.max(1e-6, epsMax) * 0.6);
     g.fillStyle = '#9ca3af'; g.fillRect(x0 + w / 2 - 30, y0 + 6, 60, 8);
     g.fillStyle = col(Tm); g.fillRect(x0 + w / 2 - 6, y0 + 14, 12, Lr);
     g.fillStyle = eng === 1 ? '#22c55e' : eng === 0.5 ? '#ef4444' : '#64748b'; g.fillRect(x0 + w / 2 - 20, y0 + 14 + Lr, 40, 10);
-    text(g, `T_fluid ${Tf.toFixed(1)} °C`, x0 + 6, y0 - 22); text(g, `ξ ${xi.toFixed(2)}  ε ${(100 * eps).toFixed(2)} %  σ ${s.toFixed(0)} MPa`, x0 + 6, y0 - 8);
-    text(g, eng === 1 ? 'clutch engaged — power stroke' : eng === 0.5 ? 'load blocked (stalled)' : 'freewheel / reset', x0 + 6, y0 + hh + 18, th.mute);
-    const px = x0 + w + 24, pw = W - px - 12, ph = (H2 - 30) / 3;
-    seriesPanel(g, { x: px, y: 8, w: pw, h: ph - 6, T: H.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'fluid', y: H.Tf, color: '#f97316' }, { name: 'wall', y: H.Tw, color: '#a855f7' }, { name: 'ribbon', y: H.Tm, color: '#38bdf8' }], hlines: [{ y: mat.Af + (d.sigmaL + sL) / mat.CA, label: 'Af(σH)', color: '#ef4444' }] });
-    seriesPanel(g, { x: px, y: 8 + ph, w: pw, h: ph - 6, T: H.t, t, title: 'ξ and σ/200', unit: '–', series: [{ name: 'ξ', y: H.xi, color: '#22c55e' }, { name: 'σ/200', y: H.sExt.map(v => v / 200), color: '#eab308' }] });
-    seriesPanel(g, { x: px, y: 8 + 2 * ph, w: pw, h: ph - 6, T: H.t, t, title: 'Interface heat flow', unit: 'W', series: [{ name: 'q fluid→wall', y: H.qIn, color: '#ef4444' }] });
+    const lines = [[`T_fluid ${Tf.toFixed(1)} °C`, th.fg], [`ξ ${xi.toFixed(2)}`, th.fg], [`ε ${(100 * eps).toFixed(2)} %`, th.fg], [`σ ${s.toFixed(0)} MPa`, th.fg], [eng === 1 ? 'clutch engaged — power stroke' : eng === 0.5 ? 'load blocked (stalled)' : 'freewheel / reset', th.mute]];
+    if (narrow) { let yy = y0 + 4; for (const [s2, c] of lines) yy = para(g, s2, x0 + w + 14, yy + z, W - x0 - w - 26, { size: z, color: c, maxLines: 2 }) - z + 4; }
+    else { label(g, lines[0][0], x0 + 2, y0 - 22, { size: z, maxW: w }); label(g, `${lines[1][0]}  ${lines[2][0]}  ${lines[3][0]}`, x0 + 2, y0 - 8, { size: z, maxW: w }); label(g, lines[4][0], x0 + 2, y0 + hh + 18, { size: z, color: th.mute, maxW: w }); }
+    const px = narrow ? 10 : x0 + w + 24, pw = W - px - 10, top = narrow ? y0 + hh + 12 : 8, ph = (H2 - top - 6) / 3;
+    seriesPanel(g, { x: px, y: top, w: pw, h: ph - 6, T: H.t, t, title: 'Temperatures', unit: '°C', series: [{ name: 'fluid', y: H.Tf, color: '#f97316' }, { name: 'wall', y: H.Tw, color: '#a855f7' }, { name: 'ribbon', y: H.Tm, color: '#38bdf8' }], hlines: [{ y: mat.Af + (d.sigmaL + sL) / mat.CA, label: 'Af(σH)', color: '#ef4444' }] });
+    seriesPanel(g, { x: px, y: top + ph, w: pw, h: ph - 6, T: H.t, t, title: 'ξ and σ/200', unit: '–', series: [{ name: 'ξ', y: H.xi, color: '#22c55e' }, { name: 'σ/200', y: H.sExt.map(v => v / 200), color: '#eab308' }] });
+    seriesPanel(g, { x: px, y: top + 2 * ph, w: pw, h: ph - 6, T: H.t, t, title: 'Interface heat flow', unit: 'W', series: [{ name: 'q fluid→wall', y: H.qIn, color: '#ef4444' }] });
   } });
 }
