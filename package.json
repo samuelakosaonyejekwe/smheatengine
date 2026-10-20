@@ -1,0 +1,6 @@
+{
+  "name": "therma-x100",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node tools/build.mjs", "test": "node tools/tests.mjs" }
+}

@@ -1,0 +1,7 @@
+/* suite-specific styles (e): materials library, dossier */
+.mat-card summary{cursor:pointer;list-style:none}.mat-card summary::-webkit-details-marker{display:none}.mat-card{margin:0;padding:10px 12px}
+.dossier .toc ol{columns:2;column-gap:28px;margin:0;padding-left:20px}.dossier .toc li{margin:2px 0;break-inside:avoid}
+.dossier details.comp>summary{cursor:pointer}.dossier details.comp>summary h2{font-size:18px;margin:0}
+.dwg-svg{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto;margin:6px 0}.dwg-svg svg{display:block;width:100%;height:auto;min-width:520px}
+@media (max-width:640px){.dossier .toc ol{columns:1}}
+@media print{.no-print{display:none!important}.dossier details.comp{break-before:page}.dwg-svg{border:0}.dwg-svg svg{min-width:0}body{background:#fff;color:#000}}

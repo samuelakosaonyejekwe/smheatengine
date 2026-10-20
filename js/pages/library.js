@@ -1,0 +1,29 @@
+// Materials library & datasheets: every record with units, uncertainty, evidence class and source; filtering,
+// side-by-side comparison and export. Suite 03 adds alloy screening, property curves and calibration.
+import { h, section, table, modal, callout } from '../core/ui.js';
+import { MATERIALS, families, COMPONENTS, indices } from '../core/materials.js';
+import { store } from '../core/state.js';
+import { download } from '../core/chart.js';
+import { fmt } from '../core/num.js';
+export const title = 'Materials library';
+
+const FIELDS = [['rho', 'Density', 'kg/m³'], ['E', 'Young’s modulus', 'GPa'], ['EA', 'Austenite modulus', 'GPa'], ['EM', 'Martensite modulus', 'GPa'], ['nu', 'Poisson ratio', '–'], ['sy', 'Yield / critical strength', 'MPa'], ['su', 'Ultimate strength', 'MPa'], ['fatigue', 'Endurance / fatigue strength', 'MPa'], ['k', 'Thermal conductivity', 'W/(m·K)'], ['kM', 'Conductivity (martensite)', 'W/(m·K)'], ['cp', 'Specific heat', 'J/(kg·K)'], ['alpha', 'Thermal expansion', 'µm/(m·K)'], ['Ms', 'Martensite start Ms', '°C'], ['Mf', 'Martensite finish Mf', '°C'], ['As', 'Austenite start As', '°C'], ['Af', 'Austenite finish Af', '°C'], ['CM', 'Clausius–Clapeyron slope CM', 'MPa/K'], ['CA', 'Clausius–Clapeyron slope CA', 'MPa/K'], ['sigS', 'Detwinning start σs', 'MPa'], ['sigF', 'Detwinning finish σf', 'MPa'], ['epsL', 'Max recoverable strain εL', '–'], ['Lh', 'Latent heat', 'J/kg'], ['hyst', 'Hysteresis width', 'K'], ['hc', 'Typical contact conductance', 'W/(m²·K)'], ['mu', 'Viscosity / friction', '–'], ['Tmin', 'Min service temperature', '°C'], ['Tmax', 'Max service temperature', '°C'], ['cost', 'Indicative cost', 'USD/kg'], ['co2', 'Embodied carbon', 'kg CO₂e/kg'], ['energy', 'Embodied energy', 'MJ/kg'], ['recyclable', 'Recyclable fraction', '–'], ['unc', 'Uncertainty band', '± %']];
+
+export async function render(root) {
+  root.append(h('h1', {}, 'Materials library & datasheets'), callout('info', 'Representative handbook and literature values with uncertainty bands and sources. They are not lot-certified: for validated predictions import supplier certificates, DSC and tensile data (Suite 03, Import mode). Evidence classes: library, estimated, hypothetical.'));
+  const q = h('input', { type: 'search', class: 'search', placeholder: 'Search name, process, use…' });
+  const fam = h('select', {}, h('option', { value: '' }, 'All families'), ...families().map(f => h('option', {}, f)));
+  const cmp = new Set(); const cmpBtn = h('button', { class: 'btn', onclick: () => compare() }, 'Compare selected (0)');
+  const grid = h('div', { class: 'lib-grid' });
+  root.append(h('div', { class: 'row gap wrap', style: 'margin:10px 0' }, q, fam, cmpBtn, h('button', { class: 'btn', onclick: () => download(new Blob([JSON.stringify(MATERIALS, null, 2)], { type: 'application/json' }), 'therma-materials.json') }, 'Export JSON'), h('button', { class: 'btn', onclick: () => download(new Blob([['id,name,family,' + FIELDS.map(f => f[0]).join(','), ...MATERIALS.map(m => [m.id, `"${m.name}"`, m.family, ...FIELDS.map(f => typeof m[f[0]] === 'number' ? m[f[0]] : '')].join(','))].join('\n')], { type: 'text/csv' }), 'therma-materials.csv') }, 'Export CSV')), grid);
+  const draw = () => { grid.innerHTML = ''; const s = q.value.toLowerCase(); for (const m of MATERIALS.filter(m => (!fam.value || m.family === fam.value) && (!s || JSON.stringify(m).toLowerCase().includes(s)))) { const chk = h('input', { type: 'checkbox', checked: cmp.has(m.id), onclick: (e) => { e.stopPropagation(); e.target.checked ? cmp.add(m.id) : cmp.delete(m.id); cmpBtn.textContent = `Compare selected (${cmp.size})`; } }); grid.append(h('div', { class: 'lib-card', role: 'button', tabindex: 0, onclick: () => sheet(m), onkeydown: (e) => { if (e.key === 'Enter') sheet(m); } }, h('div', { class: 'row gap' }, chk, h('span', { class: 'fam' }, `${m.family} · ${m.evidence}`)), h('b', {}, m.name), h('span', { class: 'small muted' }, m.family === 'SMA' ? `Mf ${m.Mf} · Ms ${m.Ms} · As ${m.As} · Af ${m.Af} °C · εL ${fmt(m.epsL * 100, 3)} %` : `ρ ${m.rho} kg/m³ · k ${m.k} W/m·K${m.sy ? ' · σy ' + m.sy + ' MPa' : ''}`))); } };
+  q.oninput = draw; fam.onchange = draw; draw();
+  const uses = Object.entries(COMPONENTS).map(([k, c]) => { const cur = store.material(k, c.def); return [c.name, h('select', { onchange: (e) => store.setMaterial(k, e.target.value) }, ...MATERIALS.filter(m => m.uses.includes(c.use)).map(m => h('option', { value: m.id, selected: m.id === cur }, m.name))), `Suite ${c.suite.slice(1)}`]; });
+  root.append(section('Component material assignment (shared by CAD, mass budgets, BOM, LCA)', table(['Component', 'Material', 'Primary suite'], uses)));
+  function compare() { const ms = MATERIALS.filter(m => cmp.has(m.id)); if (ms.length < 2) return modal('Compare materials', h('p', {}, 'Tick at least two materials.')); modal('Side-by-side comparison', table(['Property', 'Unit', ...ms.map(m => m.name)], FIELDS.filter(f => ms.some(m => typeof m[f[0]] === 'number')).map(f => [f[1], f[2], ...ms.map(m => typeof m[f[0]] === 'number' ? fmt(m[f[0]], 4) : '—')]))); }
+}
+export function sheet(m) {
+  const rows = FIELDS.filter(f => typeof m[f[0]] === 'number').map(f => [f[1], fmt(m[f[0]], 5), f[2]]);
+  const idx = Object.entries(indices).map(([k, fn]) => { try { const v = fn(m); return Number.isFinite(v) && v ? [k, fmt(v, 4)] : null; } catch { return null; } }).filter(Boolean);
+  modal(m.name, h('div', {}, h('p', { class: 'small muted' }, `${m.family} · evidence class: ${m.evidence} · uncertainty ±${m.unc} %`), table(['Property', 'Value', 'Unit'], rows), idx.length ? h('div', {}, h('h4', {}, 'Derived indices'), table(['Index', 'Value'], idx)) : null, m.processes?.length ? h('p', {}, h('b', {}, 'Processes: '), m.processes.join(' · ')) : null, m.note ? h('p', {}, h('b', {}, 'Engineering note: '), m.note) : null, h('p', { class: 'small muted' }, 'Source: ', m.src)));
+}

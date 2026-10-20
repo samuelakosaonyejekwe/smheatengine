@@ -1,0 +1,13 @@
+/* suite-specific styles (a): CAD & meshing, CFD, V&V */
+.lbm-canvas{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--line);margin:8px 0;image-rendering:auto;background:#1e293b}
+.lbm-hist{width:100%;height:140px;display:block;background:var(--panel2);border-radius:10px;border:1px solid var(--line)}
+.mesh-svg{width:100%;height:auto;display:block;background:var(--panel2);border-radius:10px;border:1px solid var(--line)}
+.mesh-svg line,.mesh-svg path{vector-effect:non-scaling-stroke}
+.dwg-box{background:#fff;border-radius:10px;border:1px solid var(--line);overflow:auto}
+.dwg-box svg{width:100%;height:auto;display:block;min-width:640px}
+.export-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.export-grid .btn{width:100%;text-align:left}
+.ladder{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:6px 0}
+.ladder span{font-size:10.5px;text-align:center;padding:4px 2px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.ladder span.on{background:color-mix(in srgb,var(--accent2) 22%,transparent);color:var(--fg);border-color:var(--accent2)}
+@media (max-width:640px){.ladder{grid-template-columns:repeat(4,1fr)}}

@@ -1,0 +1,10 @@
+# Mirror deployment on GitLab Pages (activates only when this repository is mirrored to GitLab).
+pages:
+  image: node:20-alpine
+  script:
+    - node tools/build.mjs
+    - mkdir -p public && cp -r index.html manifest.webmanifest sw.js files.json .nojekyll css js vendor icons docs public/ 2>/dev/null || true
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

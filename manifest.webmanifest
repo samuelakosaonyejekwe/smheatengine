@@ -1,0 +1,26 @@
+{
+  "name": "THERMA-X100 Engineering Research Platform",
+  "short_name": "THERMA-X100",
+  "description": "22-suite engineering and experimental research platform for a regenerative multicell shape-memory-alloy heat engine — CAD, meshing, SMA transformation, thermal circuits, regeneration, transmission, co-simulation, fatigue, optimisation, exergy, digital twin, laboratory, manufacturing, safety and techno-economics. Works offline.",
+  "id": "./",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0d0c13",
+  "theme_color": "#0d0c13",
+  "categories": ["productivity", "education", "utilities"],
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Feasibility gate", "url": "./#/feasibility" },
+    { "name": "Cartridge cycle", "url": "./#/suite/s05" },
+    { "name": "Experimental laboratory", "url": "./#/lab" },
+    { "name": "Techno-economics", "url": "./#/suite/s22" }
+  ]
+}

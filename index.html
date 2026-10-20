@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THERMA-X100</title>
+<meta name="description" content="THERMA-X100 — integrated 22-suite engineering research platform for a regenerative multicell shape-memory-alloy heat engine: CAD and meshing, SMA transformation, cartridge mechanics, thermal circuits, regeneration, transmission, co-simulation, fatigue, optimisation, exergy, digital twin, manufacturing, safety and techno-economics. Installable and works offline.">
+<meta name="theme-color" content="#0d0c13">
+<meta name="color-scheme" content="dark light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="THERMA-X100">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ext-a.css"><link rel="stylesheet" href="css/ext-b.css"><link rel="stylesheet" href="css/ext-c.css"><link rel="stylesheet" href="css/ext-d.css"><link rel="stylesheet" href="css/ext-e.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<link rel="modulepreload" href="js/app.js">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="nav-arrows">
+    <button id="navBack" class="arrow-btn" aria-label="Back" title="Back (Alt+←)"><svg viewBox="0 0 24 24"><path d="M15.5 4.5 8 12l7.5 7.5" /></svg></button>
+    <button id="navFwd" class="arrow-btn" aria-label="Forward" title="Forward (Alt+→)"><svg viewBox="0 0 24 24"><path d="M8.5 4.5 16 12l-7.5 7.5" /></svg></button>
+  </div>
+  <a class="brand" href="#/"><img src="icons/icon.svg" alt="" width="28" height="28"><span><b>THERMA</b>-X100</span></a>
+  <button id="menuBtn" class="icon-btn menu-btn" aria-label="Open navigation">☰</button>
+  <nav class="topnav" id="topnav">
+    <a href="#/">Console</a><a href="#/feasibility">Feasibility</a><a href="#/scenarios">Studies</a><a href="#/lab">Laboratory</a><a href="#/library">Materials library</a><a href="#/portal">Data portal</a><a href="#/datahub">Live data</a><a href="#/register">Input register</a><a href="#/project">Project</a><a href="#/help">Help</a>
+  </nav>
+  <div class="top-right">
+    <button id="siteBtn" class="chip site-chip" title="Installation site (drives live ambient, economics and carbon data)">📍<span id="siteName">Site</span></button>
+    <span id="netState" class="net" title="Connectivity">●</span>
+    <button id="installBtn" class="btn sm install" hidden><span>⤓</span><span class="lbl"> Install app</span></button>
+    <button id="themeBtn" class="icon-btn" aria-label="Toggle theme" title="Light / dark">◐</button>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar" aria-label="Suites"></aside>
+  <main id="main" tabindex="-1"><div class="boot"><div class="spinner"></div><p>Loading engineering console…</p></div></main>
+</div>
+<footer class="foot"><span>THERMA-X100 · <span id="ver"></span></span><span class="muted">Simulated predictions are not physical validation · Carnot is an upper bound · Live data are fetched by your device from public global services</span><a href="#/install">Install / offline copy</a></footer>
+<noscript><p style="padding:16px">THERMA-X100 requires JavaScript.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

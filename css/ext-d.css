@@ -1,0 +1,3 @@
+/* suite-specific styles (d) */
+/* phone layout: give the suite title the full row instead of squeezing it beside the badges */
+@media (max-width:860px){.suite-head .suite-titles{flex:1 1 100%;order:3}.suite-head .suite-badges{margin-left:auto}}
